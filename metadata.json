@@ -1,0 +1,6 @@
+{
+  "name": "RazorCloud",
+  "description": "Mini-SaaS B2B multi-tenant para agendamentos de barbearias com vitrine pública e painel administrativo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
