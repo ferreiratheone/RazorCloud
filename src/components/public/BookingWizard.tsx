@@ -321,7 +321,8 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
     const targetPhone = (selectedProfessional?.phone || tenant.phone || '').replace(/\D/g, '');
     
     const isVip = activeSubscription && isSubBooking;
-    const whatsAppMessage = `💈 *Novo Agendamento Confirmado!*\n\n✂️ *Serviço:* ${selectedService.name}\n📅 *Data:* ${formattedDate} às ${selectedSlot.time}\n👤 *Cliente:* ${clientName.trim()}\n📱 *WhatsApp:* ${clientPhone.trim()}\n💈 *Profissional:* ${barberName}\n${isVip ? '👑 *Plano VIP:* Atendimento incluso no Plano Mensal\n' : ''}\nAgendamento realizado pelo site oficial da ${tenant.name}!`;
+    const priceText = isVip ? 'R$ 0,00 (Incluso no Plano VIP)' : `R$ ${Number(selectedService.price).toFixed(2)}`;
+    const whatsAppMessage = `💈 *Novo Agendamento Confirmado!*\n\n✂️ *Serviço:* ${selectedService.name}\n💰 *Valor:* ${priceText}\n📅 *Data:* ${formattedDate} às ${selectedSlot.time}\n👤 *Cliente:* ${clientName.trim()}\n📱 *WhatsApp:* ${clientPhone.trim()}\n💈 *Profissional:* ${barberName}\n${isVip ? '👑 *Plano VIP:* Atendimento incluso no Plano Mensal\n' : ''}\nAgendamento realizado pelo site oficial da ${tenant.name}!`;
     
     const whatsappUrl = targetPhone 
       ? `https://wa.me/55${targetPhone}?text=${encodeURIComponent(whatsAppMessage)}`
