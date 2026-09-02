@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   CalendarDays, 
   Wallet, 
   Clock, 
   CheckCircle2, 
-  XCircle, 
   Trash2, 
   Plus, 
   User,
@@ -15,9 +14,7 @@ import {
   MessageCircle,
   Crown,
   ChevronLeft,
-  ChevronRight,
-  Filter,
-  Check
+  ChevronRight
 } from 'lucide-react';
 import { DataService, getLocalDateString } from '@/src/lib/data-service';
 import { OnboardingChecklist } from '../OnboardingChecklist';
@@ -39,6 +36,9 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
   const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'completed' | 'cancelled'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Registro de IDs excluídos para prevenir que o polling em tempo real restaure agendamentos deletados
+  const deletedIdsRef = useRef<Set<string>>(new Set());
+
   // Form State para Encaixes Manuais
   const [newClientName, setNewClientName] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
@@ -55,7 +55,10 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
         DataService.getTeam(organization.id),
         DataService.getSchedules(organization.id),
       ]);
-      setAppointments(apts);
+      
+      // Filtrar qualquer ID que tenha acabado de ser deletado pelo usuário
+      const validApts = apts.filter(a => !deletedIdsRef.current.has(a.id));
+      setAppointments(validApts);
       setServices(srvs);
       setTeam(teamList);
       setSchedules(schedList);
@@ -72,13 +75,11 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
     setLoading(true);
     loadData();
 
-    // Sincronização automática em tempo real a cada 5s e ao focar a aba
+    // Sincronização automática em tempo real a cada 5s
     const interval = setInterval(loadData, 5000);
-    window.addEventListener('focus', loadData);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('focus', loadData);
     };
   }, [organization.id, selectedDate]);
 
@@ -142,8 +143,9 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
     await DataService.updateAppointmentStatus(id, newStatus, organization.id);
   }
 
+  // Exclusão Imediata em 1 Clique (sem travas ou modais bloqueantes)
   async function handleDeleteAppointment(id: string) {
-    if (!confirm('Deseja realmente excluir este agendamento do histórico?')) return;
+    deletedIdsRef.current.add(id);
     setAppointments(prev => prev.filter(a => a.id !== id));
     await DataService.deleteAppointment(id, organization.id);
   }
@@ -195,7 +197,7 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
   }, [weekDays]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-hidden">
       
       {/* Guia / Barra Oficial da Barbearia */}
       <OnboardingChecklist 
@@ -208,27 +210,27 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
       />
 
       {/* Header da Agenda e Ações */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-white tracking-tight">Agenda de Atendimentos</h2>
-          <p className="text-xs text-zinc-400">Controle os horários marcados pelos clientes e faturamento em tempo real.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 max-w-full overflow-hidden">
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight truncate">Agenda de Atendimentos</h2>
+          <p className="text-xs text-zinc-400">Controle horários marcados e faturamento em tempo real.</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           {/* Seletor de Data Calendário Nativo */}
-          <div className="relative">
+          <div className="relative flex-1 sm:flex-initial">
             <CalendarIcon className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none" />
             <input 
               type="date" 
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-700"
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-700"
             />
           </div>
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-1.5 bg-white text-zinc-950 hover:bg-zinc-200 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0"
+            className="flex items-center justify-center gap-1.5 bg-white text-zinc-950 hover:bg-zinc-200 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0"
           >
             <Plus className="w-4 h-4" /> Novo Encaixe
           </button>
@@ -236,15 +238,15 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
       </div>
 
       {/* FILTRO POR SEMANAS (CALENDÁRIO SEMANAL DINÂMICO) */}
-      <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 space-y-3 shadow-sm">
+      <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-3 sm:p-4 space-y-3 shadow-sm max-w-full overflow-hidden">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-white uppercase tracking-wider">Filtro Semanal</span>
-            <span className="text-xs text-zinc-400">({weekRangeLabel})</span>
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            <span className="text-[11px] sm:text-xs font-bold text-white uppercase tracking-wider shrink-0">Filtro Semanal</span>
+            <span className="text-[10px] sm:text-xs text-zinc-400 truncate">({weekRangeLabel})</span>
           </div>
 
           {/* Controles de Navegação da Semana */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={() => handleNavigateWeek('prev')}
               className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors"
@@ -269,12 +271,12 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
         </div>
 
         {/* 7 Dias da Semana em Cards Clicáveis */}
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+        <div className="grid grid-cols-7 gap-1 sm:gap-2">
           {weekDays.map((d) => (
             <button
               key={d.dateStr}
               onClick={() => setSelectedDate(d.dateStr)}
-              className={`py-2.5 px-1 sm:px-2 rounded-xl text-center transition-all duration-200 border flex flex-col items-center justify-center relative
+              className={`py-2 px-1 sm:px-2 rounded-xl text-center transition-all duration-200 border flex flex-col items-center justify-center relative
                 ${d.isSelected 
                   ? 'bg-white text-zinc-950 font-bold border-white shadow-lg scale-[1.02]' 
                   : d.isToday
@@ -282,14 +284,14 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
                     : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white'
                 }`}
             >
-              <span className={`text-[10px] font-bold uppercase block leading-tight ${d.isSelected ? 'text-zinc-950' : d.isToday ? 'text-emerald-400' : 'text-zinc-500'}`}>
+              <span className={`text-[9px] sm:text-[10px] font-bold uppercase block leading-tight ${d.isSelected ? 'text-zinc-950' : d.isToday ? 'text-emerald-400' : 'text-zinc-500'}`}>
                 {d.dayName}
               </span>
-              <span className="text-sm sm:text-base font-bold block mt-0.5 leading-tight">
+              <span className="text-xs sm:text-base font-bold block mt-0.5 leading-tight">
                 {d.dayNum}
               </span>
               {d.isToday && !d.isSelected && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 absolute bottom-1.5" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 absolute bottom-1" />
               )}
             </button>
           ))}
@@ -297,7 +299,7 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
       </div>
 
       {/* Cards de Métricas do Dia */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
             <CalendarDays className="w-5 h-5 text-white" />
@@ -330,7 +332,7 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
       </div>
 
       {/* Lista de Agendamentos com Filtro de Status */}
-      <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 sm:p-6 space-y-4">
+      <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 sm:p-6 space-y-4 max-w-full overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-zinc-800/60">
           <div>
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -342,10 +344,10 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
           </div>
 
           {/* Abas de Filtro de Status */}
-          <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs">
+          <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs overflow-x-auto max-w-full scrollbar-none">
             <button
               onClick={() => setStatusFilter('all')}
-              className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+              className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
                 statusFilter === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'
               }`}
             >
@@ -353,7 +355,7 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
             </button>
             <button
               onClick={() => setStatusFilter('confirmed')}
-              className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+              className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
                 statusFilter === 'confirmed' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'text-zinc-400 hover:text-white'
               }`}
             >
@@ -361,7 +363,7 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
             </button>
             <button
               onClick={() => setStatusFilter('completed')}
-              className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+              className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
                 statusFilter === 'completed' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'text-zinc-400 hover:text-white'
               }`}
             >
@@ -369,7 +371,7 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
             </button>
             <button
               onClick={() => setStatusFilter('cancelled')}
-              className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+              className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
                 statusFilter === 'cancelled' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'text-zinc-400 hover:text-white'
               }`}
             >
@@ -414,7 +416,7 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
               return (
                 <div 
                   key={apt.id}
-                  className={`p-4 rounded-xl border transition-all ${
+                  className={`p-3.5 sm:p-4 rounded-xl border transition-all ${
                     apt.status === 'completed'
                       ? 'bg-zinc-950/40 border-zinc-800/60 opacity-75'
                       : apt.status === 'cancelled'
@@ -424,23 +426,23 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     {/* Horário e Dados do Cliente */}
-                    <div className="flex items-start sm:items-center gap-3.5">
-                      <div className="w-12 h-12 rounded-xl bg-zinc-800/80 border border-zinc-700 flex flex-col items-center justify-center shrink-0">
+                    <div className="flex items-start sm:items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-zinc-800/80 border border-zinc-700 flex flex-col items-center justify-center shrink-0">
                         <span className="text-xs font-bold text-emerald-400 leading-none">{timeFormatted}</span>
-                        <span className="text-[9px] text-zinc-400 mt-1">R$ {Number(apt.price).toFixed(0)}</span>
+                        <span className="text-[9px] text-zinc-400 mt-0.5">R$ {Number(apt.price).toFixed(0)}</span>
                       </div>
 
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-bold text-sm text-white">{apt.client_name}</h4>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                          <h4 className="font-bold text-xs sm:text-sm text-white truncate">{apt.client_name}</h4>
                           
                           {apt.is_subscription && (
-                            <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                              <Crown className="w-3 h-3 text-amber-400" /> VIP
+                            <span className="text-[9px] sm:text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                              <Crown className="w-2.5 h-2.5 text-amber-400" /> VIP
                             </span>
                           )}
 
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold capitalize ${
+                          <span className={`text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-semibold capitalize ${
                             apt.status === 'confirmed' 
                               ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                               : apt.status === 'completed'
@@ -451,7 +453,7 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs text-zinc-400 mt-1 flex-wrap">
+                        <div className="flex items-center gap-2 sm:gap-3 text-[11px] sm:text-xs text-zinc-400 mt-1 flex-wrap">
                           <span className="flex items-center gap-1">
                             <Scissors className="w-3 h-3 text-zinc-500" /> {serviceName} ({serviceDuration} min)
                           </span>
@@ -462,7 +464,7 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
                           {apt.client_phone && (
                             <>
                               <span className="text-zinc-600">•</span>
-                              <span className="flex items-center gap-1 text-zinc-400">
+                              <span className="flex items-center gap-1 text-zinc-400 font-mono">
                                 <Phone className="w-3 h-3 text-zinc-500" /> {apt.client_phone}
                               </span>
                             </>
@@ -471,8 +473,8 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
                       </div>
                     </div>
 
-                    {/* Botões de Ação */}
-                    <div className="flex items-center gap-1.5 self-end sm:self-center">
+                    {/* Botões de Ação Direta */}
+                    <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
                       {/* Botão de Lembrete no WhatsApp */}
                       {apt.status === 'confirmed' && cleanPhone && (
                         <a 
@@ -486,30 +488,22 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
                         </a>
                       )}
 
+                      {/* Botão de Concluir Atendimento */}
                       {apt.status === 'confirmed' && (
-                        <>
-                          <button 
-                            onClick={() => handleStatusChange(apt.id, 'completed')}
-                            title="Marcar como atendido / concluído"
-                            className="p-2 hover:bg-emerald-500/10 text-zinc-400 hover:text-emerald-400 rounded-lg transition-colors"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleStatusChange(apt.id, 'cancelled')}
-                            title="Cancelar agendamento (libera o horário)"
-                            className="p-2 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-colors"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        </>
+                        <button 
+                          onClick={() => handleStatusChange(apt.id, 'completed')}
+                          title="Marcar como atendido / concluído"
+                          className="p-2 hover:bg-emerald-500/10 text-zinc-400 hover:text-emerald-400 rounded-lg transition-colors border border-zinc-800 hover:border-emerald-500/30"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
                       )}
 
-                      {/* Botão de Excluir Registro do Histórico */}
+                      {/* Botão de Excluir Registro em 1 Clique (Lixeira Direta) */}
                       <button 
                         onClick={() => handleDeleteAppointment(apt.id)}
-                        title="Excluir permanentemente do histórico"
-                        className="p-2 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg transition-colors"
+                        title="Excluir agendamento (libera o horário)"
+                        className="p-2 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-colors border border-zinc-800 hover:border-red-500/30"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
