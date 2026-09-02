@@ -9,19 +9,18 @@ const RazorCloudBookingPage = lazy(() => import('./components/public/BookingWiza
 const RazorCloudAdminShell = lazy(() => import('./components/dashboard/RazorCloudAdminShell'));
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'public' | 'dashboard'>('public');
-  const [slug, setSlug] = useState('minha-barbearia');
+  const [currentView, setCurrentView] = useState<'public' | 'dashboard' | 'auth'>('auth');
+  const [slug, setSlug] = useState('');
   const [isPending, startTransition] = useTransition();
   const [isLoadingSession, setIsLoadingSession] = useState(true);
 
   const [organization, setOrganization] = useState<Organization>({
     id: 'org-main',
-    name: 'Minha Barbearia',
-    slug: 'minha-barbearia',
+    name: 'Ferreira Barber',
+    slug: 'ferreirabarber',
   });
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // 1. Ouvir e processar mudanças no Hash da URL
   useEffect(() => {
@@ -29,16 +28,21 @@ export default function App() {
       const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
       
       if (hash === 'admin') {
-        setCurrentView('dashboard');
-      } else if (hash) {
-        setSlug(hash);
-        setCurrentView('public');
-      } else {
-        // Se a raiz estiver vazia, decide baseado no login
         if (currentUser) {
           setCurrentView('dashboard');
         } else {
-          setCurrentView('public');
+          setCurrentView('auth');
+        }
+      } else if (hash) {
+        // Se houver um slug (ex: #/ferreirabarber), exibe a vitrine dessa barbearia
+        setSlug(hash);
+        setCurrentView('public');
+      } else {
+        // Se a raiz estiver vazia (ex: https://razorcloud.vercel.app/), decide baseado no login
+        if (currentUser) {
+          setCurrentView('dashboard');
+        } else {
+          setCurrentView('auth');
         }
       }
     }
@@ -62,22 +66,20 @@ export default function App() {
             setOrganization(org);
 
             const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
-            // Se o hash for #/admin ou vazio, abre o painel
             if (hash === 'admin' || !hash) {
               setSlug(org.slug);
               setCurrentView('dashboard');
             } else {
-              // Se o hash for um slug de barbearia (ex: #/minha-barbearia), exibe a vitrine daquela barbearia!
               setSlug(hash);
               setCurrentView('public');
             }
           } else {
             const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
-            if (hash === 'admin') {
-              setIsAuthModalOpen(true);
-            } else if (hash) {
+            if (hash && hash !== 'admin') {
               setSlug(hash);
               setCurrentView('public');
+            } else {
+              setCurrentView('auth');
             }
           }
         }
@@ -107,7 +109,7 @@ export default function App() {
         } else if (event === 'SIGNED_OUT') {
           if (isMounted) {
             setCurrentUser(null);
-            setCurrentView('public');
+            setCurrentView('auth');
           }
         }
       });
@@ -133,7 +135,8 @@ export default function App() {
 
   function handleOpenDashboard() {
     if (!currentUser) {
-      setIsAuthModalOpen(true);
+      window.location.hash = '#/admin';
+      setCurrentView('auth');
     } else {
       startTransition(() => {
         window.location.hash = '#/admin';
@@ -148,8 +151,8 @@ export default function App() {
     }
     localStorage.removeItem('razorcloud_current_user');
     setCurrentUser(null);
-    window.location.hash = '#/';
-    setCurrentView('public');
+    window.location.hash = '#/admin';
+    setCurrentView('auth');
   }
 
   function handleAuthSuccess(user: UserProfile, org: Organization) {
@@ -195,23 +198,21 @@ export default function App() {
               onLogout={handleLogout}
               onViewPublicPage={handleViewPublicPage}
             />
-          ) : (
+          ) : currentView === 'public' && slug ? (
             <RazorCloudBookingPage 
               slug={slug}
               onOpenDashboard={handleOpenDashboard}
+            />
+          ) : (
+            <AuthModal 
+              isOpen={true}
+              isFullPage={true}
+              onSuccess={handleAuthSuccess}
             />
           )}
         </Suspense>
       </div>
 
-      {/* Modal de Autenticação / Login do Dono */}
-      {isAuthModalOpen && (
-        <AuthModal 
-          isOpen={isAuthModalOpen}
-          onClose={() => setIsAuthModalOpen(false)}
-          onSuccess={handleAuthSuccess}
-        />
-      )}
     </div>
   );
 }
