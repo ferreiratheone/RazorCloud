@@ -22,7 +22,6 @@ import type { Organization, Service, UserProfile, TimeSlot, CustomerSubscription
 
 interface BookingWizardProps {
   slug?: string;
-  onOpenDashboard?: () => void;
 }
 
 const variants = {
@@ -31,7 +30,7 @@ const variants = {
   exit: (direction: number) => ({ zIndex: 0, x: direction < 0 ? 25 : -25, opacity: 0 })
 };
 
-export default function RazorCloudBookingPage({ slug = 'minha-barbearia', onOpenDashboard }: BookingWizardProps) {
+export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: BookingWizardProps) {
   // Estado do Estabelecimento & Dados
   const [loading, setLoading] = useState(true);
   const [tenant, setTenant] = useState<Organization | null>(null);
@@ -62,6 +61,32 @@ export default function RazorCloudBookingPage({ slug = 'minha-barbearia', onOpen
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isSingleBarber = professionals.length <= 1;
+
+  // Travar o botão "Voltar" do navegador para manter o cliente 100% dentro do fluxo de agendamento
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    window.history.pushState({ wizardStep: step }, '', window.location.href);
+
+    const handlePopState = (e: PopStateEvent) => {
+      e.preventDefault();
+      // Ao invés de voltar para o admin ou sair, retrocede o passo do agendamento
+      if (step > 1) {
+        setDirection(-1);
+        if (professionals.length <= 1 && step === 3) {
+          setStep(1);
+        } else {
+          setStep((prev) => Math.max(1, prev - 1));
+        }
+        window.history.pushState({ wizardStep: step }, '', window.location.href);
+      } else {
+        window.history.pushState({ wizardStep: 1 }, '', window.location.href);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [step, professionals.length]);
 
   // Carregar memória salva do cliente no dispositivo
   useEffect(() => {
@@ -285,14 +310,6 @@ export default function RazorCloudBookingPage({ slug = 'minha-barbearia', onOpen
         <p className="text-zinc-400 text-xs max-w-sm mb-6">
           Verifique se o link foi digitado corretamente ou contate o estabelecimento.
         </p>
-        {onOpenDashboard && (
-          <button 
-            onClick={onOpenDashboard}
-            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-semibold transition-colors"
-          >
-            Acessar Painel Administrativo
-          </button>
-        )}
       </div>
     );
   }

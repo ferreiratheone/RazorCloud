@@ -50,6 +50,14 @@ export default function RazorCloudAdminShell({
     { id: 'settings' as const, label: 'Configurações do Site', icon: Settings },
   ];
 
+  function handleOpenPublicPage(slug: string) {
+    if (typeof window !== 'undefined') {
+      window.open(`/#/${slug}`, '_blank');
+    } else {
+      onViewPublicPage(slug);
+    }
+  }
+
   const renderContent = () => {
     switch (activeTab) {
       case 'agenda':
@@ -57,7 +65,7 @@ export default function RazorCloudAdminShell({
           <AgendaTab 
             organization={organization} 
             onNavigateTab={(tab) => setActiveTab(tab)}
-            onViewPublicPage={onViewPublicPage}
+            onViewPublicPage={handleOpenPublicPage}
           />
         );
       case 'services':
@@ -75,7 +83,7 @@ export default function RazorCloudAdminShell({
           <SettingsTab 
             organization={organization} 
             onUpdateOrg={onUpdateOrg} 
-            onViewPublicPage={onViewPublicPage} 
+            onViewPublicPage={handleOpenPublicPage} 
           />
         );
       default:
@@ -83,7 +91,7 @@ export default function RazorCloudAdminShell({
           <AgendaTab 
             organization={organization} 
             onNavigateTab={(tab) => setActiveTab(tab)}
-            onViewPublicPage={onViewPublicPage}
+            onViewPublicPage={handleOpenPublicPage}
           />
         );
     }
@@ -92,10 +100,10 @@ export default function RazorCloudAdminShell({
   const supabaseConnected = isSupabaseConfigured();
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-zinc-800 selection:text-white overflow-hidden">
+    <div className="flex h-[100dvh] w-full bg-zinc-950 text-zinc-50 font-sans selection:bg-zinc-800 selection:text-white overflow-hidden">
       
       {/* SIDEBAR (DESKTOP) */}
-      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-zinc-950 border-r border-zinc-800/80 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col`}>
+      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-zinc-950 border-r border-zinc-800/80 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col h-full shrink-0`}>
         {/* Logo / Header B2B */}
         <div className="h-16 flex items-center px-6 border-b border-zinc-800/80 shrink-0">
           <div className="flex items-center gap-3">
@@ -113,7 +121,7 @@ export default function RazorCloudAdminShell({
               </span>
             </div>
           </div>
-          <button className="md:hidden ml-auto text-zinc-400" onClick={() => setIsMobileMenuOpen(false)}>
+          <button className="md:hidden ml-auto text-zinc-400 p-1" onClick={() => setIsMobileMenuOpen(false)}>
             <Menu className="w-5 h-5" />
           </button>
         </div>
@@ -190,33 +198,40 @@ export default function RazorCloudAdminShell({
         />
       )}
 
-      {/* ÁREA PRINCIPAL */}
-      <main className="flex-1 flex flex-col min-w-0 bg-zinc-950">
+      {/* ÁREA PRINCIPAL FIXA */}
+      <main className="flex-1 flex flex-col min-w-0 h-[100dvh] bg-zinc-950 overflow-hidden">
         
-        {/* Topbar */}
-        <header className="h-16 flex items-center justify-between px-4 sm:px-8 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-30 shrink-0">
-          <div className="flex items-center gap-4">
-            <button className="md:hidden p-2 -ml-2 text-zinc-400 hover:text-white" onClick={() => setIsMobileMenuOpen(true)}>
-              <Menu className="w-6 h-6" />
+        {/* Topbar Permanente e Estável */}
+        <header className="h-16 flex items-center justify-between px-4 sm:px-8 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur-md shrink-0 z-30">
+          <div className="flex items-center gap-3">
+            <button 
+              className="md:hidden p-2 -ml-2 text-zinc-300 hover:text-white bg-zinc-900/80 border border-zinc-800 rounded-xl"
+              onClick={() => setIsMobileMenuOpen(true)}
+              aria-label="Abrir Menu"
+            >
+              <Menu className="w-5 h-5" />
             </button>
-            <h1 className="text-base font-bold text-white hidden sm:block">
+            <h1 className="text-sm sm:text-base font-bold text-white">
               {navigation.find(n => n.id === activeTab)?.label}
             </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button 
-              onClick={() => onViewPublicPage(organization.slug)}
-              className="flex items-center gap-1.5 text-xs font-bold text-zinc-200 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3.5 py-2 rounded-xl transition-colors shadow-sm"
+              onClick={() => handleOpenPublicPage(organization.slug)}
+              className="flex items-center gap-1.5 text-xs font-bold text-zinc-200 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 rounded-xl transition-colors shadow-sm"
+              title="Abrir a vitrine do cliente em uma nova aba"
             >
-              <Globe className="w-3.5 h-3.5 text-emerald-400" /> Ver Vitrine do Cliente
+              <Globe className="w-3.5 h-3.5 text-emerald-400" /> 
+              <span className="hidden sm:inline">Ver Vitrine do Cliente</span>
+              <span className="sm:hidden">Vitrine</span>
             </button>
           </div>
         </header>
 
-        {/* Conteúdo Dinâmico */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-          <div className="max-w-5xl mx-auto">
+        {/* Conteúdo com Scroll Próprio */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-8">
+          <div className="max-w-5xl mx-auto pb-12">
             {renderContent()}
           </div>
         </div>

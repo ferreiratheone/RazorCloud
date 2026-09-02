@@ -34,11 +34,11 @@ export default function App() {
           setCurrentView('auth');
         }
       } else if (hash) {
-        // Se houver um slug (ex: #/ferreirabarber), exibe a vitrine dessa barbearia
+        // Se houver um slug de barbearia (ex: #/ferreirabarber), exibe a vitrine do cliente
         setSlug(hash);
         setCurrentView('public');
       } else {
-        // Se a raiz estiver vazia (ex: https://razorcloud.vercel.app/), decide baseado no login
+        // Raiz do SaaS sem hash: painel se autenticado, ou login
         if (currentUser) {
           setCurrentView('dashboard');
         } else {
@@ -126,22 +126,8 @@ export default function App() {
   }, []);
 
   function handleViewPublicPage(targetSlug: string) {
-    startTransition(() => {
-      setSlug(targetSlug);
-      window.location.hash = `#/${targetSlug}`;
-      setCurrentView('public');
-    });
-  }
-
-  function handleOpenDashboard() {
-    if (!currentUser) {
-      window.location.hash = '#/admin';
-      setCurrentView('auth');
-    } else {
-      startTransition(() => {
-        window.location.hash = '#/admin';
-        setCurrentView('dashboard');
-      });
+    if (typeof window !== 'undefined') {
+      window.open(`/#/${targetSlug}`, '_blank');
     }
   }
 
@@ -201,7 +187,6 @@ export default function App() {
           ) : currentView === 'public' && slug ? (
             <RazorCloudBookingPage 
               slug={slug}
-              onOpenDashboard={handleOpenDashboard}
             />
           ) : (
             <AuthModal 
