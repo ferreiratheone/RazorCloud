@@ -6,29 +6,37 @@ import {
   Clock, 
   CheckCircle2, 
   XCircle, 
+  Trash2, 
   Plus, 
   User, 
-  Loader2,
-  Calendar as CalendarIcon,
-  Phone
+  Loader2, 
+  Calendar as CalendarIcon, 
+  Phone, 
+  Sparkles, 
+  Scissors,
+  MessageCircle,
+  Crown
 } from 'lucide-react';
-import { DataService } from '@/src/lib/data-service';
-import type { Appointment, Organization, Service, UserProfile } from '@/src/types/database';
+import { DataService, getLocalDateString } from '@/src/lib/data-service';
+import { OnboardingChecklist } from '../OnboardingChecklist';
+import type { Appointment, Organization, Service, UserProfile, Schedule } from '@/src/types/database';
 
 interface AgendaTabProps {
   organization: Organization;
-  onNavigateToServices?: () => void;
+  onNavigateTab: (tab: 'services' | 'team' | 'hours' | 'settings') => void;
+  onViewPublicPage: (slug: string) => void;
 }
 
-export function AgendaTab({ organization, onNavigateToServices }: AgendaTabProps) {
+export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: AgendaTabProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [team, setTeam] = useState<UserProfile[]>([]);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateString(new Date()));
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // New appointment form state
+  // Form State para Encaixes Manuais
   const [newClientName, setNewClientName] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
   const [newServiceId, setNewServiceId] = useState('');
@@ -37,43 +45,59 @@ export function AgendaTab({ organization, onNavigateToServices }: AgendaTabProps
   const [isCreating, setIsCreating] = useState(false);
 
   async function loadData() {
-    setLoading(true);
     try {
-      const [apts, srvs, teamList] = await Promise.all([
+      const [apts, srvs, teamList, schedList] = await Promise.all([
         DataService.getAppointments(organization.id, selectedDate),
         DataService.getServices(organization.id),
         DataService.getTeam(organization.id),
+        DataService.getSchedules(organization.id),
       ]);
       setAppointments(apts);
       setServices(srvs);
       setTeam(teamList);
+      setSchedules(schedList);
       if (srvs.length > 0 && !newServiceId) setNewServiceId(srvs[0].id);
       if (teamList.length > 0 && !newBarberId) setNewBarberId(teamList[0].id);
     } catch (e) {
-      console.error(e);
+      console.error('Erro ao carregar dados da agenda:', e);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
+    setLoading(true);
     loadData();
+
+    // Sincronização automática em tempo real a cada 5s e ao focar a aba
+    const interval = setInterval(loadData, 5000);
+    window.addEventListener('focus', loadData);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', loadData);
+    };
   }, [organization.id, selectedDate]);
 
-  // Cálculos de métricas do dia
+  // Métricas do dia
   const activeAppointments = appointments.filter(a => a.status !== 'cancelled');
   const totalRevenue = activeAppointments.reduce((acc, a) => acc + (Number(a.price) || 0), 0);
   const totalCompleted = appointments.filter(a => a.status === 'completed').length;
-  const occupancyRate = Math.min(100, Math.round((activeAppointments.length / 16) * 100)); // base de 16 slots por dia
 
   async function handleStatusChange(id: string, newStatus: Appointment['status']) {
-    await DataService.updateAppointmentStatus(id, newStatus);
+    await DataService.updateAppointmentStatus(id, newStatus, organization.id);
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
+  }
+
+  async function handleDeleteAppointment(id: string) {
+    if (!confirm('Deseja realmente excluir este agendamento do histórico?')) return;
+    await DataService.deleteAppointment(id, organization.id);
+    setAppointments(prev => prev.filter(a => a.id !== id));
   }
 
   async function handleCreateAppointment(e: React.FormEvent) {
     e.preventDefault();
-    if (!newClientName || !newServiceId || !newBarberId) return;
+    if (!newClientName || !newServiceId) return;
 
     setIsCreating(true);
     try {
@@ -85,24 +109,26 @@ export function AgendaTab({ organization, onNavigateToServices }: AgendaTabProps
       start.setHours(hours, mins, 0, 0);
       const end = new Date(start.getTime() + duration * 60 * 1000);
 
-      await DataService.createAppointment({
+      const barberId = newBarberId || (team.length > 0 ? team[0].id : 'owner-user');
+
+      const created = await DataService.createAppointment({
         organization_id: organization.id,
         service_id: newServiceId,
-        user_id: newBarberId,
-        client_name: newClientName,
-        client_phone: newClientPhone,
+        user_id: barberId,
+        client_name: newClientName.trim(),
+        client_phone: newClientPhone.trim(),
         start_time: start.toISOString(),
         end_time: end.toISOString(),
         status: 'confirmed',
         price: srv?.price || 50,
       });
 
+      setAppointments(prev => [created, ...prev]);
       setIsModalOpen(false);
       setNewClientName('');
       setNewClientPhone('');
-      await loadData();
     } catch (err) {
-      console.error(err);
+      console.error('Erro ao criar agendamento:', err);
     } finally {
       setIsCreating(false);
     }
@@ -110,107 +136,141 @@ export function AgendaTab({ organization, onNavigateToServices }: AgendaTabProps
 
   return (
     <div className="space-y-6">
-      {/* Header com Data e Ação Rápida */}
+      
+      {/* Guia / Barra Oficial da Barbearia */}
+      <OnboardingChecklist 
+        organization={organization}
+        services={services}
+        team={team}
+        schedules={schedules}
+        onNavigateTab={onNavigateTab}
+        onViewPublicPage={onViewPublicPage}
+      />
+
+      {/* Header da Agenda e Ações */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-white">Agenda do Dia</h2>
-          <p className="text-xs text-zinc-400">Acompanhe e gerencie todos os clientes agendados.</p>
+          <h2 className="text-xl font-bold text-white tracking-tight">Agenda de Atendimentos</h2>
+          <p className="text-xs text-zinc-400">Controle os horários marcados pelos clientes e faturamento em tempo real.</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <input 
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs px-3 py-2 rounded-xl focus:outline-none focus:border-zinc-700"
-          />
-          <button 
+        <div className="flex items-center gap-2">
+          {/* Seletor de Data */}
+          <div className="relative">
+            <CalendarIcon className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none" />
+            <input 
+              type="date" 
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-700"
+            />
+          </div>
+
+          <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-white text-zinc-950 hover:bg-zinc-200 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+            className="flex items-center gap-1.5 bg-white text-zinc-950 hover:bg-zinc-200 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shadow-sm"
           >
-            <Plus className="w-3.5 h-3.5" /> Novo Agendamento
+            <Plus className="w-4 h-4" /> Novo Encaixe
           </button>
         </div>
       </div>
 
-      {/* Cards de Métricas */}
+      {/* Cards de Métricas do Dia */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-zinc-900/40 border border-zinc-800/60 p-5 rounded-2xl">
-          <div className="p-2 bg-zinc-800/60 rounded-lg w-fit mb-3">
-            <CalendarDays className="w-4 h-4 text-zinc-300" />
+        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+            <CalendarDays className="w-5 h-5 text-white" />
           </div>
-          <p className="text-zinc-400 text-xs font-medium">Agendamentos Hoje</p>
-          <p className="text-2xl font-bold text-zinc-100 mt-0.5">{activeAppointments.length}</p>
+          <div>
+            <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider block">Agendamentos</span>
+            <span className="text-xl font-bold text-white">{activeAppointments.length}</span>
+          </div>
         </div>
 
-        <div className="bg-zinc-900/40 border border-zinc-800/60 p-5 rounded-2xl">
-          <div className="p-2 bg-emerald-500/10 rounded-lg w-fit mb-3 border border-emerald-500/20">
-            <Wallet className="w-4 h-4 text-emerald-400" />
+        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+            <Wallet className="w-5 h-5 text-emerald-400" />
           </div>
-          <p className="text-zinc-400 text-xs font-medium">Receita Estimada</p>
-          <p className="text-2xl font-bold text-emerald-400 mt-0.5">R$ {totalRevenue.toFixed(2)}</p>
+          <div>
+            <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider block">Faturamento Previsto</span>
+            <span className="text-xl font-bold text-emerald-400">R$ {totalRevenue.toFixed(2)}</span>
+          </div>
         </div>
 
-        <div className="bg-zinc-900/40 border border-zinc-800/60 p-5 rounded-2xl">
-          <div className="p-2 bg-zinc-800/60 rounded-lg w-fit mb-3">
-            <TrendingUp className="w-4 h-4 text-zinc-300" />
+        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5 text-zinc-300" />
           </div>
-          <p className="text-zinc-400 text-xs font-medium">Taxa de Ocupação</p>
-          <p className="text-2xl font-bold text-zinc-100 mt-0.5">{occupancyRate}%</p>
+          <div>
+            <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider block">Atendimentos Concluídos</span>
+            <span className="text-xl font-bold text-white">{totalCompleted} / {appointments.length}</span>
+          </div>
         </div>
       </div>
 
-      {/* Lista de Agendamentos Reais */}
-      <div>
-        <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-3">
-          Próximos Clientes ({appointments.length})
-        </h3>
+      {/* Lista de Agendamentos */}
+      <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 sm:p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <Clock className="w-4 h-4 text-zinc-400" /> Horários do Dia
+          </h3>
+          <span className="text-xs text-zinc-400">
+            {new Date(`${selectedDate}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+          </span>
+        </div>
 
         {loading ? (
-          <div className="p-12 text-center text-zinc-500">
-            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-zinc-400" />
-            Carregando agenda...
+          <div className="py-12 text-center text-zinc-500 flex flex-col items-center justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-zinc-400 mb-2" />
+            <p className="text-xs">Carregando agendamentos...</p>
           </div>
         ) : appointments.length === 0 ? (
-          <div className="border-2 border-dashed border-zinc-800/60 rounded-2xl p-10 text-center bg-zinc-900/20">
-            <CalendarDays className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-            <h4 className="text-sm font-medium text-zinc-300">Nenhum agendamento para esta data</h4>
-            <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
-              Compartilhe o link público com seus clientes ou crie um agendamento manual no botão acima.
-            </p>
+          <div className="py-12 text-center border border-dashed border-zinc-800/80 rounded-xl p-6">
+            <Clock className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+            <p className="text-xs font-semibold text-zinc-300">Nenhum agendamento para esta data.</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5">Os clientes que agendarem pelo site oficial aparecerão automaticamente aqui.</p>
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="divide-y divide-zinc-800/60">
             {appointments.map((apt) => {
-              const date = new Date(apt.start_time);
-              const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-              const srv = apt.service || services.find(s => s.id === apt.service_id);
-              const barber = apt.barber || team.find(t => t.id === apt.user_id);
+              const srv = services.find(s => s.id === apt.service_id);
+              const barber = team.find(t => t.id === apt.user_id);
+              const timeStr = new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+              const cleanPhone = apt.client_phone ? apt.client_phone.replace(/\D/g, '') : '';
+              const reminderText = `Fala ${apt.client_name}! Passando para lembrar do seu corte hoje às ${timeStr} na ${organization.name}. Te esperamos lá! ✂️`;
+              const whatsappReminderUrl = cleanPhone 
+                ? `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(reminderText)}`
+                : null;
 
               return (
-                <div 
-                  key={apt.id} 
-                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-zinc-900/40 border rounded-xl gap-3 transition-all
-                    ${apt.status === 'completed' ? 'border-zinc-800/40 opacity-70' : apt.status === 'cancelled' ? 'border-red-900/30 opacity-50 bg-red-950/10' : 'border-zinc-800/60'}
-                  `}
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 bg-zinc-800 rounded-full border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-300 shrink-0">
-                      {apt.client_name ? apt.client_name.substring(0, 2).toUpperCase() : 'CL'}
+                <div key={apt.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors hover:bg-zinc-900/20 px-2 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-white shrink-0 mt-0.5">
+                      {apt.client_name.substring(0, 2).toUpperCase()}
                     </div>
+
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-sm text-white">{apt.client_name}</p>
+                        <span className="font-bold text-sm text-white">{apt.client_name}</span>
+                        {apt.is_subscription && (
+                          <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                            <Crown className="w-3 h-3" /> VIP
+                          </span>
+                        )}
                         {apt.status === 'completed' && (
                           <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-medium">Concluído</span>
                         )}
                         {apt.status === 'cancelled' && (
                           <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full font-medium">Cancelado</span>
                         )}
+                        {apt.status === 'confirmed' && (
+                          <span className="text-[10px] bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full font-medium">Confirmado</span>
+                        )}
                       </div>
                       <p className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2">
                         <span>{srv?.name || 'Serviço'} • {srv?.duration || 30} min</span>
-                        {barber && <span className="text-zinc-500">• Barbeiro: {barber.full_name}</span>}
+                        {barber && <span className="text-zinc-500">• {barber.full_name}</span>}
                       </p>
                       {apt.client_phone && (
                         <p className="text-[11px] text-zinc-500 flex items-center gap-1 mt-0.5">
@@ -223,27 +283,58 @@ export function AgendaTab({ organization, onNavigateToServices }: AgendaTabProps
                   <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 border-zinc-800/50 pt-2 sm:pt-0">
                     <div className="text-left sm:text-right">
                       <p className="font-bold text-sm text-emerald-400">{timeStr}</p>
-                      <p className="text-[11px] text-zinc-400 font-medium">R$ {Number(apt.price).toFixed(2)}</p>
+                      <p className="text-[11px] text-zinc-400 font-medium">
+                        {apt.is_subscription ? (
+                          <span className="text-amber-400 font-semibold">Plano VIP</span>
+                        ) : (
+                          `R$ ${Number(apt.price).toFixed(2)}`
+                        )}
+                      </p>
                     </div>
 
-                    {apt.status === 'confirmed' && (
-                      <div className="flex items-center gap-1.5">
-                        <button 
-                          onClick={() => handleStatusChange(apt.id, 'completed')}
-                          title="Marcar como atendido"
-                          className="p-2 hover:bg-emerald-500/10 text-zinc-400 hover:text-emerald-400 rounded-lg transition-colors"
+                    {/* Botões de Ação Rápida */}
+                    <div className="flex items-center gap-1">
+                      {/* Botão de Lembrete no WhatsApp */}
+                      {whatsappReminderUrl && apt.status === 'confirmed' && (
+                        <a 
+                          href={whatsappReminderUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Enviar lembrete no WhatsApp do cliente"
+                          className="p-2 hover:bg-emerald-500/20 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg transition-colors flex items-center justify-center"
                         >
-                          <CheckCircle2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleStatusChange(apt.id, 'cancelled')}
-                          title="Cancelar agendamento"
-                          className="p-2 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-colors"
-                        >
-                          <XCircle className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
+                          <MessageCircle className="w-4 h-4" />
+                        </a>
+                      )}
+
+                      {apt.status === 'confirmed' && (
+                        <>
+                          <button 
+                            onClick={() => handleStatusChange(apt.id, 'completed')}
+                            title="Marcar como atendido / concluído"
+                            className="p-2 hover:bg-emerald-500/10 text-zinc-400 hover:text-emerald-400 rounded-lg transition-colors"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleStatusChange(apt.id, 'cancelled')}
+                            title="Cancelar agendamento (libera o horário)"
+                            className="p-2 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-colors"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+
+                      {/* Botão de Excluir Registro do Histórico */}
+                      <button 
+                        onClick={() => handleDeleteAppointment(apt.id)}
+                        title="Excluir permanentemente do histórico"
+                        className="p-2 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -252,21 +343,21 @@ export function AgendaTab({ organization, onNavigateToServices }: AgendaTabProps
         )}
       </div>
 
-      {/* Modal de Novo Agendamento Manual */}
+      {/* Modal de Novo Agendamento Manual (Encaixe) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <h3 className="text-lg font-bold text-white">Criar Agendamento Manual</h3>
             
             <form onSubmit={handleCreateAppointment} className="space-y-3.5">
               <div>
-                <label className="text-xs text-zinc-400 font-medium block mb-1">Nome do Cliente</label>
+                <label className="text-xs text-zinc-400 font-medium block mb-1">Nome do Cliente *</label>
                 <input 
-                  type="text"
+                  type="text" 
                   required
                   value={newClientName}
                   onChange={(e) => setNewClientName(e.target.value)}
-                  placeholder="Ex: João Silva"
+                  placeholder="Ex: Carlos Santana"
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
                 />
               </div>
@@ -274,7 +365,7 @@ export function AgendaTab({ organization, onNavigateToServices }: AgendaTabProps
               <div>
                 <label className="text-xs text-zinc-400 font-medium block mb-1">WhatsApp / Telefone</label>
                 <input 
-                  type="tel"
+                  type="tel" 
                   value={newClientPhone}
                   onChange={(e) => setNewClientPhone(e.target.value)}
                   placeholder="(11) 99999-9999"
@@ -297,7 +388,7 @@ export function AgendaTab({ organization, onNavigateToServices }: AgendaTabProps
                 </div>
 
                 <div>
-                  <label className="text-xs text-zinc-400 font-medium block mb-1">Barbeiro</label>
+                  <label className="text-xs text-zinc-400 font-medium block mb-1">Profissional</label>
                   <select 
                     value={newBarberId}
                     onChange={(e) => setNewBarberId(e.target.value)}
@@ -311,9 +402,9 @@ export function AgendaTab({ organization, onNavigateToServices }: AgendaTabProps
               </div>
 
               <div>
-                <label className="text-xs text-zinc-400 font-medium block mb-1">Horário de Início</label>
+                <label className="text-xs text-zinc-400 font-medium block mb-1">Horário do Atendimento</label>
                 <input 
-                  type="time"
+                  type="time" 
                   required
                   value={newTime}
                   onChange={(e) => setNewTime(e.target.value)}
@@ -321,26 +412,27 @@ export function AgendaTab({ organization, onNavigateToServices }: AgendaTabProps
                 />
               </div>
 
-              <div className="flex gap-3 pt-3">
-                <button 
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+                <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold py-2.5 rounded-xl transition-colors"
+                  className="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
                 >
                   Cancelar
                 </button>
-                <button 
+                <button
                   type="submit"
                   disabled={isCreating}
-                  className="flex-1 bg-white text-zinc-950 hover:bg-zinc-200 text-xs font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                  className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 py-2 rounded-xl text-xs font-bold transition-colors shadow-sm disabled:opacity-50"
                 >
-                  {isCreating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Salvar Agendamento'}
+                  {isCreating ? 'Salvando...' : 'Salvar Encaixe'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
     </div>
   );
 }

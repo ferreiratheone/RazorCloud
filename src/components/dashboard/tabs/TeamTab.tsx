@@ -1,21 +1,61 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Users, 
   Plus, 
   Trash2, 
   Edit3, 
-  Star, 
   Phone, 
   Mail, 
   Loader2,
-  ShieldCheck,
-  UserCheck
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import { DataService } from '@/src/lib/data-service';
 import type { Organization, UserProfile } from '@/src/types/database';
 
 interface TeamTabProps {
   organization: Organization;
+}
+
+function compressAndConvertImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_DIM = 400;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        } else {
+          resolve(e.target?.result as string);
+        }
+      };
+      img.onerror = () => reject(new Error('Erro ao processar imagem.'));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error('Erro ao ler arquivo.'));
+    reader.readAsDataURL(file);
+  });
 }
 
 export function TeamTab({ organization }: TeamTabProps) {
@@ -31,6 +71,8 @@ export function TeamTab({ organization }: TeamTabProps) {
   const [role, setRole] = useState<'owner' | 'barber' | 'admin'>('barber');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadTeam() {
     setLoading(true);
@@ -68,6 +110,18 @@ export function TeamTab({ organization }: TeamTabProps) {
     setIsModalOpen(true);
   }
 
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const base64 = await compressAndConvertImage(file);
+      setAvatarUrl(base64);
+    } catch (err) {
+      console.error('Erro ao carregar foto:', err);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!fullName.trim()) return;
@@ -81,7 +135,7 @@ export function TeamTab({ organization }: TeamTabProps) {
           phone: phone.trim() || undefined,
           role,
           avatar_url: avatarUrl.trim() || undefined,
-        });
+        }, organization.id);
       } else {
         await DataService.createTeamMember({
           organization_id: organization.id,
@@ -89,7 +143,7 @@ export function TeamTab({ organization }: TeamTabProps) {
           email: email.trim() || undefined,
           phone: phone.trim() || undefined,
           role,
-          avatar_url: avatarUrl.trim() || `https://images.unsplash.com/photo-${1534528741775 + Math.floor(Math.random()*1000)}?w=150&auto=format&fit=crop&q=80`,
+          avatar_url: avatarUrl.trim() || undefined,
           active: true,
         });
       }
@@ -103,105 +157,104 @@ export function TeamTab({ organization }: TeamTabProps) {
   }
 
   async function handleDelete(id: string) {
-    if (confirm('Tem certeza que deseja remover este membro da equipe?')) {
-      await DataService.deleteTeamMember(id);
-      setTeam(prev => prev.filter(t => t.id !== id));
-    }
+    if (!confirm('Deseja realmente remover este membro da equipe?')) return;
+    await DataService.deleteTeamMember(id, organization.id);
+    await loadTeam();
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-white">Sua Equipe de Profissionais</h2>
-          <p className="text-xs text-zinc-400">Cadastre os barbeiros que atendem no salão para receberem agendamentos.</p>
+          <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            <Users className="w-5 h-5 text-zinc-400" /> Equipe de Profissionais
+          </h2>
+          <p className="text-xs text-zinc-400">Gerencie os barbeiros e cabeleireiros disponíveis para os clientes escolherem.</p>
         </div>
+
         <button 
           onClick={handleOpenCreate}
-          className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+          className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm self-start sm:self-auto"
         >
-          <Plus className="w-4 h-4" /> Adicionar Barbeiro
+          <Plus className="w-4 h-4" /> Adicionar Profissional
         </button>
       </div>
 
-      {/* Grid de Barbeiros */}
       {loading ? (
-        <div className="p-12 text-center text-zinc-500">
+        <div className="py-16 text-center text-zinc-500">
           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-zinc-400" />
-          Carregando equipe...
+          <p className="text-xs">Carregando equipe...</p>
         </div>
       ) : team.length === 0 ? (
-        <div className="border-2 border-dashed border-zinc-800/60 rounded-2xl p-12 text-center bg-zinc-900/20">
-          <Users className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-          <h3 className="text-sm font-medium text-zinc-300">Nenhum barbeiro cadastrado</h3>
-          <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
-            Cadastre os profissionais para que os clientes possam selecioná-los no momento do agendamento.
+        <div className="border border-dashed border-zinc-800 rounded-3xl p-8 text-center bg-zinc-900/20">
+          <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-3">
+            <Users className="w-6 h-6 text-zinc-500" />
+          </div>
+          <h3 className="text-sm font-bold text-white mb-1">Nenhum profissional cadastrado</h3>
+          <p className="text-xs text-zinc-400 max-w-sm mx-auto mb-5">
+            Se você atende sozinho ou tem outros barbeiros na sua equipe, cadastre os nomes para aparecerem na escolha do cliente.
           </p>
+          <button 
+            onClick={handleOpenCreate}
+            className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 py-2.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-colors shadow-sm"
+          >
+            <Plus className="w-4 h-4" /> Cadastrar Primeiro Profissional
+          </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {team.map((member) => (
             <div 
               key={member.id}
-              className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl p-5 flex flex-col justify-between"
+              className="p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800/80 hover:border-zinc-700 transition-all flex items-start justify-between gap-4"
             >
-              <div>
-                <div className="flex items-center gap-3.5 mb-4">
-                  {member.avatar_url ? (
-                    <img 
-                      src={member.avatar_url} 
-                      alt={member.full_name} 
-                      width={48}
-                      height={48}
-                      loading="lazy"
-                      decoding="async"
-                      referrerPolicy="no-referrer"
-                      className="w-12 h-12 rounded-xl object-cover border border-zinc-700 shrink-0 aspect-square" 
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-zinc-300 text-sm shrink-0">
-                      {member.full_name.substring(0, 2).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-white text-sm truncate">{member.full_name}</h3>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider bg-zinc-800/80 px-2 py-0.5 rounded-full border border-zinc-700/50">
-                        {member.role === 'owner' ? 'Dono' : member.role === 'admin' ? 'Gerente' : 'Barbeiro'}
-                      </span>
-                      <span className="text-xs text-amber-400 flex items-center gap-0.5 font-medium">
-                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> {member.rating || 5.0}
-                      </span>
-                    </div>
+              <div className="flex items-start gap-3.5">
+                {member.avatar_url ? (
+                  <img 
+                    src={member.avatar_url} 
+                    alt={member.full_name} 
+                    className="w-12 h-12 rounded-xl object-cover border border-zinc-700 aspect-square shrink-0" 
+                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-sm text-zinc-300 shrink-0">
+                    {member.full_name.substring(0, 2).toUpperCase()}
                   </div>
-                </div>
+                )}
 
-                <div className="space-y-1.5 text-xs text-zinc-400 border-t border-zinc-800/50 pt-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-sm text-white">{member.full_name}</h3>
+                    <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-medium capitalize">
+                      {member.role === 'owner' ? 'Proprietário' : 'Barbeiro'}
+                    </span>
+                  </div>
+
                   {member.phone && (
-                    <p className="flex items-center gap-2">
-                      <Phone className="w-3.5 h-3.5 text-zinc-500" /> {member.phone}
+                    <p className="text-xs text-zinc-400 flex items-center gap-1 mt-1">
+                      <Phone className="w-3 h-3 text-zinc-500" /> {member.phone}
                     </p>
                   )}
+
                   {member.email && (
-                    <p className="flex items-center gap-2 truncate">
-                      <Mail className="w-3.5 h-3.5 text-zinc-500 shrink-0" /> {member.email}
+                    <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5">
+                      <Mail className="w-3 h-3 text-zinc-600" /> {member.email}
                     </p>
                   )}
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-1.5 pt-4 mt-3 border-t border-zinc-800/40">
+              <div className="flex items-center gap-1">
                 <button 
                   onClick={() => handleOpenEdit(member)}
-                  className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                  className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
                   title="Editar"
                 >
                   <Edit3 className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={() => handleDelete(member.id)}
-                  className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                  className="p-1.5 text-zinc-400 hover:text-red-400 rounded-lg hover:bg-zinc-800 transition-colors"
                   title="Excluir"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -212,38 +265,37 @@ export function TeamTab({ organization }: TeamTabProps) {
         </div>
       )}
 
-      {/* Modal de Criação / Edição de Membro */}
+      {/* Modal Criar / Editar Membro */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <h3 className="text-lg font-bold text-white">
-              {editingMember ? 'Editar Profissional' : 'Novo Barbeiro'}
+              {editingMember ? 'Editar Profissional' : 'Novo Profissional'}
             </h3>
 
             <form onSubmit={handleSubmit} className="space-y-3.5">
               <div>
-                <label className="text-xs text-zinc-400 font-medium block mb-1">Nome Completo</label>
+                <label className="text-xs text-zinc-400 font-medium block mb-1">Nome Completo *</label>
                 <input 
                   type="text" 
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Ex: Matheus Santos"
+                  placeholder="Ex: Matheus Oliveira"
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-zinc-400 font-medium block mb-1">Função / Cargo</label>
+                  <label className="text-xs text-zinc-400 font-medium block mb-1">Cargo / Função</label>
                   <select 
                     value={role}
-                    onChange={(e: any) => setRole(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-600"
+                    onChange={(e) => setRole(e.target.value as any)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-zinc-600"
                   >
-                    <option value="barber">Barbeiro</option>
-                    <option value="owner">Dono / Sócio</option>
-                    <option value="admin">Gerente</option>
+                    <option value="owner">Dono / Administrador</option>
+                    <option value="barber">Barbeiro / Especialista</option>
                   </select>
                 </div>
 
@@ -253,37 +305,72 @@ export function TeamTab({ organization }: TeamTabProps) {
                     type="tel" 
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="(11) 98888-7777"
+                    placeholder="(11) 99999-9999"
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs text-zinc-400 font-medium block mb-1">Email</label>
+                <label className="text-xs text-zinc-400 font-medium block mb-1">E-mail (Opcional)</label>
                 <input 
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="barbeiro@exemplo.com"
+                  placeholder="matheus@barbearia.com"
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
                 />
               </div>
 
+              {/* Upload da Foto do Barbeiro */}
               <div>
-                <label className="text-xs text-zinc-400 font-medium block mb-1">URL da Foto de Perfil (Opcional)</label>
+                <label className="text-xs text-zinc-400 font-medium block mb-1.5">Foto do Barbeiro</label>
+                
                 <input 
-                  type="url" 
-                  value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                  type="file" 
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
                 />
+
+                <div className="flex items-center gap-3">
+                  {avatarUrl ? (
+                    <div className="relative group">
+                      <img 
+                        src={avatarUrl} 
+                        alt="Foto do Barbeiro" 
+                        className="w-12 h-12 rounded-xl object-cover border border-zinc-700 shadow-md aspect-square"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAvatarUrl('')}
+                        title="Remover foto"
+                        className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full p-1 shadow-lg transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-zinc-950 border border-dashed border-zinc-800 flex items-center justify-center shrink-0">
+                      <ImageIcon className="w-5 h-5 text-zinc-600" />
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-zinc-400" />
+                    {avatarUrl ? 'Trocar Foto' : 'Escolher Foto (PC / Celular)'}
+                  </button>
+                </div>
               </div>
 
               <div className="flex gap-3 pt-3">
                 <button 
-                  type="button"
+                  type="button" 
                   onClick={() => setIsModalOpen(false)}
                   className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold py-2.5 rounded-xl transition-colors"
                 >
@@ -292,9 +379,9 @@ export function TeamTab({ organization }: TeamTabProps) {
                 <button 
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 bg-white text-zinc-950 hover:bg-zinc-200 text-xs font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                  className="flex-1 bg-white text-zinc-950 hover:bg-zinc-200 text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm"
                 >
-                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Salvar Barbeiro'}
+                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Salvar Profissional'}
                 </button>
               </div>
             </form>

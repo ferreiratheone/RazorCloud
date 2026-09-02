@@ -3,27 +3,32 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) ? (import.meta as any).env : {};
 
-const supabaseUrl = 
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 
+export const supabaseUrl = 
   metaEnv.VITE_SUPABASE_URL || 
   metaEnv.NEXT_PUBLIC_SUPABASE_URL ||
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL) ||
   'https://your-project.supabase.co';
 
-const supabaseAnonKey = 
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+export const supabaseAnonKey = 
   metaEnv.VITE_SUPABASE_ANON_KEY || 
   metaEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY) ||
   'your-anon-key';
 
+export function isSupabaseConfigured(): boolean {
+  return Boolean(
+    supabaseUrl && 
+    supabaseAnonKey && 
+    !supabaseUrl.includes('your-project.supabase.co') &&
+    !supabaseAnonKey.includes('your-anon-key')
+  );
+}
+
 /**
- * Supabase client for browser environments (Client Components).
- * Utiliza @supabase/ssr createBrowserClient para gerenciar sessões e cookies automaticamente.
+ * Supabase client singleton para uso em todo o frontend
  */
 export function createClient() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }
 
-/**
- * Instância singleton do client do navegador para uso rápido em Client Components.
- */
 export const supabase = createClient();

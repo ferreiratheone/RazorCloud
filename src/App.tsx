@@ -1,47 +1,123 @@
 import React, { useState, useEffect, useTransition, Suspense, lazy } from 'react';
 import { AuthModal } from './components/auth/AuthModal';
 import { DataService } from './lib/data-service';
+import { supabase, isSupabaseConfigured } from './lib/supabase/client';
 import type { Organization, UserProfile } from './types/database';
-import { Scissors, LayoutDashboard, Globe, KeyRound, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
-// Dynamic code splitting for high PageSpeed performance and minimal initial bundle size
 const RazorCloudBookingPage = lazy(() => import('./components/public/BookingWizard'));
 const RazorCloudAdminShell = lazy(() => import('./components/dashboard/RazorCloudAdminShell'));
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'public' | 'dashboard'>('dashboard');
+  const [currentView, setCurrentView] = useState<'public' | 'dashboard'>('public');
   const [slug, setSlug] = useState('minha-barbearia');
   const [isPending, startTransition] = useTransition();
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+
   const [organization, setOrganization] = useState<Organization>({
-    id: 'org-demo-123',
-    name: 'RazorCloud Barber Studio',
+    id: 'org-main',
+    name: 'Minha Barbearia',
     slug: 'minha-barbearia',
-    address: 'Avenida Paulista, 1500 - São Paulo, SP',
-    phone: '(11) 98765-4321',
   });
 
-  const [currentUser, setCurrentUser] = useState<UserProfile>({
-    id: 'user-demo-1',
-    organization_id: 'org-demo-123',
-    full_name: 'Alexandre Silva',
-    role: 'owner',
-    email: 'alexandre@razorcloud.app',
-    rating: 4.9,
-    avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  });
-
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
+  // 1. Ouvir e processar mudanças no Hash da URL
   useEffect(() => {
-    let isMounted = true;
-    async function init() {
-      const org = await DataService.getOrganizationBySlug(slug);
-      if (org && isMounted) {
-        setOrganization(org);
-        setSlug(org.slug);
+    function parseHashRoute() {
+      const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
+      
+      if (hash === 'admin') {
+        setCurrentView('dashboard');
+      } else if (hash) {
+        setSlug(hash);
+        setCurrentView('public');
+      } else {
+        // Se a raiz estiver vazia, decide baseado no login
+        if (currentUser) {
+          setCurrentView('dashboard');
+        } else {
+          setCurrentView('public');
+        }
       }
     }
-    init();
+
+    parseHashRoute();
+    window.addEventListener('hashchange', parseHashRoute);
+    return () => window.removeEventListener('hashchange', parseHashRoute);
+  }, [currentUser]);
+
+  // 2. Verificar Sessão Autenticada no Supabase / Local
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initSession() {
+      try {
+        const { user, organization: org } = await DataService.getCurrentUserProfile();
+        
+        if (isMounted) {
+          if (user && org) {
+            setCurrentUser(user);
+            setOrganization(org);
+
+            const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
+            // Se o hash for #/admin ou vazio, abre o painel
+            if (hash === 'admin' || !hash) {
+              setSlug(org.slug);
+              setCurrentView('dashboard');
+            } else {
+              // Se o hash for um slug de barbearia (ex: #/minha-barbearia), exibe a vitrine daquela barbearia!
+              setSlug(hash);
+              setCurrentView('public');
+            }
+          } else {
+            const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
+            if (hash === 'admin') {
+              setIsAuthModalOpen(true);
+            } else if (hash) {
+              setSlug(hash);
+              setCurrentView('public');
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao inicializar sessão:', err);
+      } finally {
+        if (isMounted) setIsLoadingSession(false);
+      }
+    }
+
+    initSession();
+
+    // Listener de login / logout no Supabase
+    if (isSupabaseConfigured()) {
+      const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          const { user, organization: org } = await DataService.getCurrentUserProfile();
+          if (user && org && isMounted) {
+            setCurrentUser(user);
+            setOrganization(org);
+            setSlug(org.slug);
+            const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
+            if (hash === 'admin' || !hash) {
+              setCurrentView('dashboard');
+            }
+          }
+        } else if (event === 'SIGNED_OUT') {
+          if (isMounted) {
+            setCurrentUser(null);
+            setCurrentView('public');
+          }
+        }
+      });
+
+      return () => {
+        isMounted = false;
+        authListener?.subscription.unsubscribe();
+      };
+    }
+
     return () => {
       isMounted = false;
     };
@@ -50,14 +126,30 @@ export default function App() {
   function handleViewPublicPage(targetSlug: string) {
     startTransition(() => {
       setSlug(targetSlug);
+      window.location.hash = `#/${targetSlug}`;
       setCurrentView('public');
     });
   }
 
-  function handleSwitchView(view: 'public' | 'dashboard') {
-    startTransition(() => {
-      setCurrentView(view);
-    });
+  function handleOpenDashboard() {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+    } else {
+      startTransition(() => {
+        window.location.hash = '#/admin';
+        setCurrentView('dashboard');
+      });
+    }
+  }
+
+  async function handleLogout() {
+    if (isSupabaseConfigured()) {
+      await supabase.auth.signOut();
+    }
+    localStorage.removeItem('razorcloud_current_user');
+    setCurrentUser(null);
+    window.location.hash = '#/';
+    setCurrentView('public');
   }
 
   function handleAuthSuccess(user: UserProfile, org: Organization) {
@@ -65,73 +157,34 @@ export default function App() {
       setCurrentUser(user);
       setOrganization(org);
       setSlug(org.slug);
+      window.location.hash = '#/admin';
       setCurrentView('dashboard');
     });
   }
 
+  if (isLoadingSession) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-50 flex flex-col items-center justify-center p-4">
+        <Loader2 className="w-8 h-8 animate-spin text-zinc-400 mb-3" />
+        <p className="text-xs text-zinc-500">Inicializando RazorCloud...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 font-sans flex flex-col antialiased">
-      {/* Dev & Testing Quick Navigation Bar */}
-      <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs z-40 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded bg-zinc-800 flex items-center justify-center border border-zinc-700">
-            <Scissors className="w-3 h-3 text-zinc-200" />
-          </div>
-          <span className="font-bold text-white tracking-tight">RazorCloud Mini-SaaS</span>
-          <span className="text-zinc-500 hidden sm:inline">|</span>
-          <span className="text-zinc-400 hidden sm:inline">
-            Modo: <strong className="text-zinc-200">{currentView === 'dashboard' ? 'Painel do Dono (B2B)' : 'Vitrine do Cliente Final'}</strong>
-          </span>
-          {isPending && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400">
-              <Loader2 className="w-3 h-3 animate-spin text-zinc-400" />
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex bg-zinc-950 p-0.5 rounded-lg border border-zinc-800">
-            <button
-              onClick={() => handleSwitchView('dashboard')}
-              aria-label="Abrir Painel B2B"
-              className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-semibold transition-colors
-                ${currentView === 'dashboard' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}
-              `}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" /> Painel B2B
-            </button>
-            <button
-              onClick={() => handleSwitchView('public')}
-              aria-label="Abrir Vitrine Pública"
-              className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-semibold transition-colors
-                ${currentView === 'public' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}
-              `}
-            >
-              <Globe className="w-3.5 h-3.5" /> Vitrine /{organization.slug}
-            </button>
-          </div>
-
-          <button
-            onClick={() => setIsAuthModalOpen(true)}
-            aria-label="Trocar Conta ou Fazer Login"
-            className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white px-2.5 py-1 rounded-lg border border-zinc-700 transition-colors"
-          >
-            <KeyRound className="w-3.5 h-3.5" /> Trocar Conta / Login
-          </button>
-        </div>
-      </div>
-
-      {/* Main View Render with Suspense Fallback */}
+      
+      {/* Visualização Principal */}
       <div className="flex-1 min-h-0">
         <Suspense
           fallback={
             <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-zinc-500">
               <Loader2 className="w-8 h-8 animate-spin text-zinc-400 mb-3" />
-              <p className="text-xs font-medium text-zinc-400">Carregando interface do RazorCloud...</p>
+              <p className="text-xs text-zinc-500">Carregando interface...</p>
             </div>
           }
         >
-          {currentView === 'dashboard' ? (
+          {currentView === 'dashboard' && currentUser ? (
             <RazorCloudAdminShell 
               currentUser={currentUser}
               organization={organization}
@@ -139,19 +192,19 @@ export default function App() {
                 setOrganization(newOrg);
                 setSlug(newOrg.slug);
               }}
-              onLogout={() => setIsAuthModalOpen(true)}
+              onLogout={handleLogout}
               onViewPublicPage={handleViewPublicPage}
             />
           ) : (
             <RazorCloudBookingPage 
               slug={slug}
-              onOpenDashboard={() => handleSwitchView('dashboard')}
+              onOpenDashboard={handleOpenDashboard}
             />
           )}
         </Suspense>
       </div>
 
-      {/* Auth Modal */}
+      {/* Modal de Autenticação / Login do Dono */}
       {isAuthModalOpen && (
         <AuthModal 
           isOpen={isAuthModalOpen}

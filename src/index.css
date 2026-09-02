@@ -1,17 +1,50 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    --sat: env(safe-area-inset-top, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+  }
+
   html {
     -webkit-tap-highlight-color: transparent;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
+    touch-action: manipulation;
+    overflow-x: hidden;
+    height: 100%;
   }
 
-  /* Prevent layout shifts on scrollbar appearance */
   body {
-    overflow-y: scroll;
+    overflow-x: hidden;
+    overscroll-behavior-y: none;
+    touch-action: manipulation;
+    min-height: 100%;
+    min-height: 100dvh;
+    padding-top: var(--sat);
+    padding-bottom: var(--sab);
+    padding-left: var(--sal);
+    padding-right: var(--sar);
+  }
+
+  /* Remoção de atraso de 300ms e zoom em inputs */
+  button, 
+  a, 
+  input, 
+  select, 
+  textarea {
+    touch-action: manipulation;
+  }
+
+  /* Previne zoom automático no Safari iOS em inputs de texto */
+  @media screen and (max-width: 768px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
   }
 }
 
@@ -20,4 +53,13 @@
   transform: translateZ(0);
   will-change: transform, opacity;
   backface-visibility: hidden;
+}
+
+/* Utilitários de Safe Area do iOS */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 16px);
 }
