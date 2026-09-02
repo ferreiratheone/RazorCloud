@@ -33,7 +33,7 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateString(new Date()));
-  const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'completed' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'confirmed' | 'completed' | 'cancelled'>('confirmed');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Registro de IDs excluídos para prevenir que o polling em tempo real restaure agendamentos deletados
@@ -127,9 +127,8 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
     setSelectedDate(getLocalDateString(curr));
   }
 
-  // Filtragem de agendamentos por status
+  // Filtragem de agendamentos por status (Agendados, Concluídos, Cancelados)
   const filteredAppointments = useMemo(() => {
-    if (statusFilter === 'all') return appointments;
     return appointments.filter(a => a.status === statusFilter);
   }, [appointments, statusFilter]);
 
@@ -343,28 +342,24 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
             </span>
           </div>
 
-          {/* Abas de Filtro de Status */}
+          {/* 3 Abas de Status: Agendados, Concluídos e Cancelados */}
           <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs overflow-x-auto max-w-full scrollbar-none">
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
-                statusFilter === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              Todos ({appointments.length})
-            </button>
             <button
               onClick={() => setStatusFilter('confirmed')}
               className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
-                statusFilter === 'confirmed' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'text-zinc-400 hover:text-white'
+                statusFilter === 'confirmed' 
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
-              Confirmados ({appointments.filter(a => a.status === 'confirmed').length})
+              Agendados ({appointments.filter(a => a.status === 'confirmed').length})
             </button>
             <button
               onClick={() => setStatusFilter('completed')}
               className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
-                statusFilter === 'completed' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'text-zinc-400 hover:text-white'
+                statusFilter === 'completed' 
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' 
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               Concluídos ({appointments.filter(a => a.status === 'completed').length})
@@ -372,7 +367,9 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
             <button
               onClick={() => setStatusFilter('cancelled')}
               className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
-                statusFilter === 'cancelled' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'text-zinc-400 hover:text-white'
+                statusFilter === 'cancelled' 
+                  ? 'bg-red-500/20 text-red-300 border border-red-500/30' 
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               Cancelados ({appointments.filter(a => a.status === 'cancelled').length})
@@ -389,9 +386,9 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
           <div className="py-12 text-center border border-dashed border-zinc-800/80 rounded-xl p-6">
             <Clock className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
             <p className="text-xs font-semibold text-zinc-300">
-              {statusFilter === 'all' 
-                ? 'Nenhum agendamento para esta data.' 
-                : `Nenhum agendamento com status "${statusFilter}" nesta data.`}
+              {statusFilter === 'confirmed' && 'Nenhum cliente com horário agendado para este dia.'}
+              {statusFilter === 'completed' && 'Nenhum atendimento concluído registrado nesta data.'}
+              {statusFilter === 'cancelled' && 'Nenhum agendamento cancelado nesta data.'}
             </p>
             <p className="text-[11px] text-zinc-500 mt-1">Os clientes que agendarem pelo site oficial aparecerão automaticamente aqui.</p>
           </div>
