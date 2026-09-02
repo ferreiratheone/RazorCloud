@@ -670,7 +670,8 @@ export const DataService = {
   async updateAppointmentStatus(id: string, status: Appointment['status'], orgId: string): Promise<void> {
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('appointments').update({ status }).eq('id', id);
+        const { error } = await supabase.from('appointments').update({ status }).eq('id', id);
+        if (error) console.warn('Aviso ao atualizar status no Supabase:', error);
       } catch (e) {
         console.error('Erro ao atualizar status do agendamento:', e);
       }
@@ -681,10 +682,13 @@ export const DataService = {
     setLocalData('appointments_' + orgId, updated);
   },
 
-  async deleteAppointment(id: string, orgId: string): Promise<void> {
+  async deleteAppointment(id: string, orgId: string): Promise<boolean> {
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('appointments').delete().eq('id', id);
+        const { error } = await supabase.from('appointments').delete().eq('id', id);
+        if (error) {
+          console.warn('Aviso ao excluir agendamento do Supabase:', error);
+        }
       } catch (e) {
         console.error('Erro ao excluir agendamento do Supabase:', e);
       }
@@ -693,6 +697,7 @@ export const DataService = {
     const list = getLocalData<Appointment[]>('appointments_' + orgId, []);
     const updated = list.filter(a => a.id !== id);
     setLocalData('appointments_' + orgId, updated);
+    return true;
   },
 
   // --- PLANOS MENSAIS E ASSINATURAS (CLUBE VIP) ---
