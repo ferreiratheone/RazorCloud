@@ -168,9 +168,14 @@ export function PlansTab({ organization, onUpdateOrg }: PlansTabProps) {
 
   // --- Ações de Assinantes ---
   function handleOpenCreateSub() {
+    if (plans.length === 0) {
+      alert('Cadastre primeiro um plano mensal antes de adicionar assinantes.');
+      handleOpenCreatePlan();
+      return;
+    }
     setSubClientName('');
     setSubClientPhone('');
-    if (plans.length > 0) setSubPlanId(plans[0].id);
+    setSubPlanId(plans[0].id);
     const d = new Date();
     d.setDate(d.getDate() + 30);
     setSubRenewalDate(d.toISOString().split('T')[0]);
@@ -317,8 +322,23 @@ export function PlansTab({ organization, onUpdateOrg }: PlansTabProps) {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-          {plans.map((p) => (
+        {plans.length === 0 ? (
+          <div className="py-12 text-center border border-dashed border-zinc-800 rounded-2xl p-6 bg-zinc-950/40">
+            <Crown className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+            <p className="text-sm font-bold text-white">Nenhum plano mensal cadastrado</p>
+            <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
+              Crie planos de assinatura (ex: Quinzenal, VIP Semanal) para garantir receita recorrente todo mês.
+            </p>
+            <button 
+              onClick={handleOpenCreatePlan}
+              className="mt-4 bg-white text-zinc-950 hover:bg-zinc-200 px-4 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-colors shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" /> Criar Primeiro Plano
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+            {plans.map((p) => (
             <div 
               key={p.id}
               className="p-5 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-amber-500/40 transition-all space-y-3 relative group"
@@ -360,6 +380,7 @@ export function PlansTab({ organization, onUpdateOrg }: PlansTabProps) {
             </div>
           ))}
         </div>
+      )}
       </div>
 
       {/* Seção 2: Gestão de Assinantes Ativos */}
