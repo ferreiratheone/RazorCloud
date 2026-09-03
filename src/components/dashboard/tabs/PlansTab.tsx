@@ -54,6 +54,7 @@ export function PlansTab({ organization, onUpdateOrg }: PlansTabProps) {
   });
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isTogglingPlans, setIsTogglingPlans] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -80,12 +81,20 @@ export function PlansTab({ organization, onUpdateOrg }: PlansTabProps) {
 
   // Alternar se a barbearia trabalha ou não com planos
   async function handleTogglePlansEnabled() {
-    const newVal = !(organization.plans_enabled ?? true);
-    const updated = await DataService.updateOrganization({
-      id: organization.id,
-      plans_enabled: newVal,
-    });
-    onUpdateOrg(updated);
+    if (isTogglingPlans) return;
+    setIsTogglingPlans(true);
+    try {
+      const newVal = !(organization.plans_enabled ?? true);
+      const updated = await DataService.updateOrganization({
+        id: organization.id,
+        plans_enabled: newVal,
+      });
+      onUpdateOrg(updated);
+    } catch (e) {
+      console.error('Erro ao alternar módulo de planos:', e);
+    } finally {
+      setIsTogglingPlans(false);
+    }
   }
 
   // Métricas
@@ -245,7 +254,8 @@ export function PlansTab({ organization, onUpdateOrg }: PlansTabProps) {
           </span>
           <button
             onClick={handleTogglePlansEnabled}
-            className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${
+            disabled={isTogglingPlans}
+            className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 disabled:opacity-50 disabled:cursor-not-allowed ${
               isPlansEnabled ? 'bg-amber-500' : 'bg-zinc-700'
             }`}
           >
@@ -559,7 +569,7 @@ export function PlansTab({ organization, onUpdateOrg }: PlansTabProps) {
                 <button 
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 bg-white text-zinc-950 hover:bg-zinc-200 text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                  className="flex-1 bg-white text-zinc-950 hover:bg-zinc-200 text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Salvar Plano'}
                 </button>
@@ -642,7 +652,7 @@ export function PlansTab({ organization, onUpdateOrg }: PlansTabProps) {
                 <button 
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                  className="flex-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Cadastrar Assinante'}
                 </button>

@@ -133,14 +133,14 @@ export default function RazorCloudAdminShell({
   const supabaseConnected = isSupabaseConfigured();
 
   return (
-    <div className="flex h-[100dvh] w-full max-w-full bg-zinc-950 text-zinc-50 font-sans selection:bg-zinc-800 selection:text-white overflow-hidden">
+    <div className="min-h-screen w-full bg-[#0a0a0a] text-zinc-50 font-sans selection:bg-zinc-800 selection:text-white flex">
       
-      {/* SIDEBAR (DESKTOP) */}
-      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-zinc-950 border-r border-zinc-800/80 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col h-full shrink-0`}>
+      {/* SIDEBAR FIXA (DESKTOP E MOBILE DRAWER) */}
+      <aside className={`w-64 fixed h-screen bg-[#0a0a0a] border-r border-zinc-800 flex flex-col z-40 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} transition-transform duration-300 ease-in-out shrink-0`}>
         {/* Logo / Header B2B */}
-        <div className="h-16 flex items-center px-6 border-b border-zinc-800/80 shrink-0">
+        <div className="h-16 flex items-center px-6 border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl overflow-hidden bg-zinc-900 border border-zinc-700 flex items-center justify-center shrink-0 shadow-sm">
+            <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#121212] border border-zinc-700 flex items-center justify-center shrink-0 shadow-sm">
               <img 
                 src="/razorcloud.webp" 
                 alt="RazorCloud Logo" 
@@ -170,7 +170,7 @@ export default function RazorCloudAdminShell({
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group text-left
                 ${activeTab === item.id 
                   ? 'bg-zinc-800 text-white font-semibold shadow-sm border border-zinc-700' 
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border border-transparent'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#121212] border border-transparent'
                 }`}
             >
               <item.icon className={`w-4 h-4 ${
@@ -189,7 +189,7 @@ export default function RazorCloudAdminShell({
           ))}
 
           <div className="pt-6 px-3">
-            <div className="p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl space-y-1">
+            <div className="p-3 bg-[#121212] border border-zinc-800 rounded-xl space-y-1">
               <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>Sistema Online & Seguro</span>
@@ -205,8 +205,8 @@ export default function RazorCloudAdminShell({
         </div>
 
         {/* Perfil do Dono / Footer */}
-        <div className="p-4 border-t border-zinc-800/80 shrink-0">
-          <div className="flex items-center gap-3 p-2 bg-zinc-900/60 rounded-xl border border-zinc-800">
+        <div className="p-4 border-t border-zinc-800 shrink-0">
+          <div className="flex items-center gap-3 p-2 bg-[#121212] rounded-xl border border-zinc-800">
             {currentUser.avatar_url ? (
               <img 
                 src={currentUser.avatar_url} 
@@ -236,19 +236,19 @@ export default function RazorCloudAdminShell({
       {/* OVERLAY MOBILE */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
-      {/* ÁREA PRINCIPAL FIXA */}
-      <main className="flex-1 flex flex-col min-w-0 h-[100dvh] max-w-full bg-zinc-950 overflow-hidden">
+      {/* CONTEÚDO PRINCIPAL (DESKTOP COM MARGEM FIXA ML-64) */}
+      <main className="flex-1 ml-0 md:ml-64 min-h-screen bg-[#0a0a0a] text-white flex flex-col min-w-0">
         
         {/* Topbar Permanente e Estável */}
-        <header className="h-16 flex items-center justify-between px-3 sm:px-8 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur-md shrink-0 z-30 max-w-full overflow-hidden">
+        <header className="h-16 flex items-center justify-between px-4 sm:px-8 border-b border-zinc-800 bg-[#0a0a0a]/95 backdrop-blur-md sticky top-0 z-20 shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button 
-              className="md:hidden p-2 text-zinc-300 hover:text-white bg-zinc-900/80 border border-zinc-800 rounded-xl shrink-0"
+              className="md:hidden p-2 text-zinc-300 hover:text-white bg-[#121212] border border-zinc-800 rounded-xl shrink-0"
               onClick={() => setIsMobileMenuOpen(true)}
               aria-label="Abrir Menu"
             >
@@ -262,7 +262,7 @@ export default function RazorCloudAdminShell({
           <div className="flex items-center gap-2 shrink-0">
             <button 
               onClick={() => handleOpenPublicPage(organization.slug)}
-              className="flex items-center gap-1.5 text-xs font-bold text-zinc-200 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl transition-colors shadow-sm shrink-0"
+              className="flex items-center gap-1.5 text-xs font-bold text-zinc-200 bg-[#121212] hover:bg-zinc-800 border border-zinc-800 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl transition-colors shadow-sm shrink-0"
               title="Abrir a vitrine do cliente em uma nova aba"
             >
               <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> 
@@ -272,11 +272,9 @@ export default function RazorCloudAdminShell({
           </div>
         </header>
 
-        {/* Conteúdo com Scroll Próprio */}
-        <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-8 max-w-full overflow-x-hidden">
-          <div className="max-w-5xl mx-auto pb-12 w-full">
-            {renderContent()}
-          </div>
+        {/* Conteúdo Dinâmico com Padding Padronizado */}
+        <div className="p-4 sm:p-6 md:p-8 flex-1 w-full max-w-6xl mx-auto">
+          {renderContent()}
         </div>
 
       </main>

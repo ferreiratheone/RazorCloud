@@ -352,7 +352,7 @@ export function SettingsTab({ organization, onUpdateOrg, onViewPublicPage }: Set
             <button 
               type="submit"
               disabled={isSaving}
-              className="bg-white text-zinc-950 hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm disabled:opacity-50"
+              className="bg-white text-zinc-950 hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving ? (
                 <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...</>

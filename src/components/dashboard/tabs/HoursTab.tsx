@@ -160,7 +160,7 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
         <button 
           onClick={handleSave}
           disabled={isSaving}
-          className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm disabled:opacity-50 self-start sm:self-auto shrink-0"
+          className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed self-start sm:self-auto shrink-0"
         >
           {isSaving ? (
             <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...</>

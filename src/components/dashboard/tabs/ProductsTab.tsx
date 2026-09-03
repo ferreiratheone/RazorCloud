@@ -44,6 +44,7 @@ export function ProductsTab({ organization, onUpdateOrg }: ProductsTabProps) {
   const [stock, setStock] = useState('50');
   const [imageUrl, setImageUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isTogglingVitrine, setIsTogglingVitrine] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,12 +86,20 @@ export function ProductsTab({ organization, onUpdateOrg }: ProductsTabProps) {
   }
 
   async function handleToggleVitrine() {
-    const nextState = !organization.products_enabled;
-    const updated = await DataService.updateOrganization({
-      id: organization.id,
-      products_enabled: nextState,
-    });
-    onUpdateOrg(updated);
+    if (isTogglingVitrine) return;
+    setIsTogglingVitrine(true);
+    try {
+      const nextState = !organization.products_enabled;
+      const updated = await DataService.updateOrganization({
+        id: organization.id,
+        products_enabled: nextState,
+      });
+      onUpdateOrg(updated);
+    } catch (e) {
+      console.error('Erro ao alternar vitrine:', e);
+    } finally {
+      setIsTogglingVitrine(false);
+    }
   }
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -186,13 +195,14 @@ export function ProductsTab({ organization, onUpdateOrg }: ProductsTabProps) {
 
         <button
           onClick={handleToggleVitrine}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 self-start sm:self-auto shrink-0 shadow-sm ${
+          disabled={isTogglingVitrine}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 self-start sm:self-auto shrink-0 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
             organization.products_enabled
               ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700'
               : 'bg-purple-600 hover:bg-purple-500 text-white'
           }`}
         >
-          <Power className="w-3.5 h-3.5" />
+          {isTogglingVitrine ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
           {organization.products_enabled ? 'Desativar Vitrine' : 'Ativar Vitrine'}
         </button>
       </div>
