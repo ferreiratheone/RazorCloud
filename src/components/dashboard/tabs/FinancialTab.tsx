@@ -194,9 +194,9 @@ export function FinancialTab({ organization }: FinancialTabProps) {
               </span>
             </div>
 
-            {/* Visualização de Gráfico em Barras Responsivo */}
-            <div className="pt-6 pb-2">
-              <div className="grid grid-flow-col auto-cols-fr gap-2 sm:gap-3 items-end h-44 sm:h-52 border-b border-zinc-800/80 px-2 pb-2">
+            {/* Visualização de Gráfico em Barras Responsivo com Scroll Horizontal Isolado */}
+            <div className="pt-6 pb-2 overflow-x-auto w-full max-w-full scrollbar-thin">
+              <div className="min-w-[320px] sm:min-w-full grid grid-flow-col auto-cols-fr gap-2 sm:gap-3 items-end h-44 sm:h-52 border-b border-zinc-800/80 px-2 pb-2">
                 {metrics.dailyRevenue.map((d, i) => {
                   const barHeight = Math.max(8, Math.round((d.revenue / maxDailyRevenue) * 100));
                   return (

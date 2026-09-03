@@ -133,10 +133,10 @@ export default function RazorCloudAdminShell({
   const supabaseConnected = isSupabaseConfigured();
 
   return (
-    <div className="min-h-screen w-full bg-[#0a0a0a] text-zinc-50 font-sans selection:bg-zinc-800 selection:text-white flex">
+    <div className="flex h-screen bg-[#0a0a0a] overflow-hidden text-zinc-50 font-sans selection:bg-zinc-800 selection:text-white">
       
       {/* SIDEBAR FIXA (DESKTOP E MOBILE DRAWER) */}
-      <aside className={`w-64 fixed h-screen bg-[#0a0a0a] border-r border-zinc-800 flex flex-col z-40 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} transition-transform duration-300 ease-in-out shrink-0`}>
+      <aside className={`fixed h-screen w-64 z-40 bg-[#0a0a0a] border-r border-zinc-800 flex flex-col transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} transition-transform duration-300 ease-in-out shrink-0`}>
         {/* Logo / Header B2B */}
         <div className="h-16 flex items-center px-6 border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-3">
@@ -241,11 +241,11 @@ export default function RazorCloudAdminShell({
         />
       )}
 
-      {/* CONTEÚDO PRINCIPAL (DESKTOP COM MARGEM FIXA ML-64) */}
-      <main className="flex-1 ml-0 md:ml-64 min-h-screen bg-[#0a0a0a] text-white flex flex-col min-w-0">
+      {/* ÁREA DE CONTEÚDO (SCROLL CONDICIONAL COM OVERFLOW-Y-AUTO) */}
+      <main className="flex-1 h-screen overflow-y-auto p-4 md:ml-64 md:p-8 bg-[#0a0a0a] text-white">
         
         {/* Topbar Permanente e Estável */}
-        <header className="h-16 flex items-center justify-between px-4 sm:px-8 border-b border-zinc-800 bg-[#0a0a0a]/95 backdrop-blur-md sticky top-0 z-20 shrink-0">
+        <header className="h-16 flex items-center justify-between pb-4 sm:pb-6 border-b border-zinc-800 mb-6 shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button 
               className="md:hidden p-2 text-zinc-300 hover:text-white bg-[#121212] border border-zinc-800 rounded-xl shrink-0"
@@ -272,8 +272,8 @@ export default function RazorCloudAdminShell({
           </div>
         </header>
 
-        {/* Conteúdo Dinâmico com Padding Padronizado */}
-        <div className="p-4 sm:p-6 md:p-8 flex-1 w-full max-w-6xl mx-auto">
+        {/* Conteúdo Dinâmico */}
+        <div className="w-full max-w-6xl mx-auto pb-12">
           {renderContent()}
         </div>
 
