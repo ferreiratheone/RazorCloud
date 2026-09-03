@@ -65,7 +65,6 @@ export default function RazorCloudAdminShell({
     { id: 'products' as const, label: 'Produtos & Vitrine', icon: ShoppingBag },
     { id: 'clients' as const, label: 'Base de Clientes', icon: Contact2 },
     { id: 'plans' as const, label: 'Clube de Assinaturas', icon: Crown },
-    { id: 'whatsapp' as const, label: 'Automação WhatsApp', icon: MessageSquare },
     { id: 'hours' as const, label: 'Horários da Barbearia', icon: Clock },
     { id: 'team' as const, label: 'Equipe de Barbeiros', icon: Users },
     { id: 'settings' as const, label: 'Configurações do Site', icon: Settings },
@@ -175,9 +174,7 @@ export default function RazorCloudAdminShell({
                         ? 'text-emerald-400' 
                         : item.id === 'products'
                           ? 'text-purple-400'
-                          : item.id === 'whatsapp'
-                            ? 'text-emerald-400'
-                            : 'text-white') 
+                          : 'text-white') 
                   : 'text-zinc-500 group-hover:text-zinc-400'
               }`} />
               <span className="text-xs">{item.label}</span>
