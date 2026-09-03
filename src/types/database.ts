@@ -8,7 +8,16 @@ export interface Organization {
   phone?: string;
   logo_url?: string;
   plans_enabled?: boolean;
+  products_enabled?: boolean;
+  whatsapp_auto_enabled?: boolean;
+  whatsapp_api_url?: string;
+  whatsapp_api_instance?: string;
+  whatsapp_api_token?: string;
+  whatsapp_reminder_hours?: number;
+  whatsapp_msg_confirmation?: string;
+  whatsapp_msg_reminder?: string;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface UserProfile {
@@ -22,6 +31,7 @@ export interface UserProfile {
   phone?: string;
   active?: boolean;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface Service {
@@ -33,6 +43,29 @@ export interface Service {
   duration: number; // in minutes
   active: boolean;
   created_at?: string;
+  updated_at?: string;
+}
+
+// --- PRODUTOS E ITENS ADICIONAIS DA BARBEARIA ---
+export interface Product {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  price: number;
+  category: string; // "Pomadas & Ceras", "Bebidas", "Acessórios", "Vestuário", "Geral"
+  image_url?: string;
+  stock?: number;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AppointmentProductItem {
+  product_id: string;
+  name: string;
+  price: number;
+  quantity: number;
 }
 
 export interface Schedule {
@@ -60,7 +93,10 @@ export interface Appointment {
   price: number;
   notes?: string;
   is_subscription?: boolean;
+  products?: AppointmentProductItem[];
+  products_total?: number;
   created_at?: string;
+  updated_at?: string;
   // Joins
   service?: Service;
   barber?: UserProfile;
@@ -97,4 +133,41 @@ export interface CustomerSubscription {
   created_at?: string;
   // Join
   plan?: MembershipPlan;
+}
+
+// --- RELATÓRIOS E MÉTRICAS FINANCEIRAS ---
+export interface FinancialMetrics {
+  totalRevenue: number;
+  servicesRevenue: number;
+  productsRevenue: number;
+  totalAppointments: number;
+  completedAppointments: number;
+  cancelledAppointments: number;
+  averageTicket: number;
+  topServices: {
+    name: string;
+    count: number;
+    revenue: number;
+    percentage: number;
+  }[];
+  topProducts: {
+    name: string;
+    count: number;
+    revenue: number;
+    percentage: number;
+  }[];
+  barberPerformance: {
+    barberId: string;
+    barberName: string;
+    avatarUrl?: string;
+    cutsCount: number;
+    revenue: number;
+    percentage: number;
+  }[];
+  dailyRevenue: {
+    date: string;
+    dayLabel: string;
+    revenue: number;
+    appointmentsCount: number;
+  }[];
 }

@@ -10,7 +10,10 @@ import {
   ShieldCheck,
   Globe,
   Contact2,
-  Crown
+  Crown,
+  TrendingUp,
+  ShoppingBag,
+  MessageSquare
 } from 'lucide-react';
 import { AgendaTab } from './tabs/AgendaTab';
 import { ServicesTab } from './tabs/ServicesTab';
@@ -19,6 +22,9 @@ import { PlansTab } from './tabs/PlansTab';
 import { TeamTab } from './tabs/TeamTab';
 import { HoursTab } from './tabs/HoursTab';
 import { SettingsTab } from './tabs/SettingsTab';
+import { FinancialTab } from './tabs/FinancialTab';
+import { ProductsTab } from './tabs/ProductsTab';
+import { WhatsAppTab } from './tabs/WhatsAppTab';
 import { isSupabaseConfigured } from '@/src/lib/supabase/client';
 import type { Organization, UserProfile } from '@/src/types/database';
 
@@ -30,6 +36,18 @@ interface RazorCloudAdminShellProps {
   onViewPublicPage: (slug: string) => void;
 }
 
+export type DashboardTab = 
+  | 'agenda' 
+  | 'financial'
+  | 'services' 
+  | 'products'
+  | 'clients' 
+  | 'plans' 
+  | 'whatsapp'
+  | 'hours' 
+  | 'team' 
+  | 'settings';
+
 export default function RazorCloudAdminShell({
   currentUser,
   organization,
@@ -37,14 +55,17 @@ export default function RazorCloudAdminShell({
   onLogout,
   onViewPublicPage,
 }: RazorCloudAdminShellProps) {
-  const [activeTab, setActiveTab] = useState<'agenda' | 'services' | 'clients' | 'plans' | 'team' | 'hours' | 'settings'>('agenda');
+  const [activeTab, setActiveTab] = useState<DashboardTab>('agenda');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navigation = [
     { id: 'agenda' as const, label: 'Agenda do Dia', icon: CalendarDays },
+    { id: 'financial' as const, label: 'Relatório Financeiro', icon: TrendingUp },
     { id: 'services' as const, label: 'Serviços e Preços', icon: Scissors },
+    { id: 'products' as const, label: 'Produtos & Vitrine', icon: ShoppingBag },
     { id: 'clients' as const, label: 'Base de Clientes', icon: Contact2 },
     { id: 'plans' as const, label: 'Clube de Assinaturas', icon: Crown },
+    { id: 'whatsapp' as const, label: 'Automação WhatsApp', icon: MessageSquare },
     { id: 'hours' as const, label: 'Horários da Barbearia', icon: Clock },
     { id: 'team' as const, label: 'Equipe de Barbeiros', icon: Users },
     { id: 'settings' as const, label: 'Configurações do Site', icon: Settings },
@@ -68,12 +89,18 @@ export default function RazorCloudAdminShell({
             onViewPublicPage={handleOpenPublicPage}
           />
         );
+      case 'financial':
+        return <FinancialTab organization={organization} />;
       case 'services':
         return <ServicesTab organization={organization} />;
+      case 'products':
+        return <ProductsTab organization={organization} onUpdateOrg={onUpdateOrg} />;
       case 'clients':
         return <ClientsTab organization={organization} />;
       case 'plans':
         return <PlansTab organization={organization} onUpdateOrg={onUpdateOrg} />;
+      case 'whatsapp':
+        return <WhatsAppTab organization={organization} onUpdateOrg={onUpdateOrg} />;
       case 'team':
         return <TeamTab organization={organization} />;
       case 'hours':
@@ -140,7 +167,19 @@ export default function RazorCloudAdminShell({
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border border-transparent'
                 }`}
             >
-              <item.icon className={`w-4 h-4 ${activeTab === item.id ? (item.id === 'plans' ? 'text-amber-400' : 'text-white') : 'text-zinc-500 group-hover:text-zinc-400'}`} />
+              <item.icon className={`w-4 h-4 ${
+                activeTab === item.id 
+                  ? (item.id === 'plans' 
+                      ? 'text-amber-400' 
+                      : item.id === 'financial' 
+                        ? 'text-emerald-400' 
+                        : item.id === 'products'
+                          ? 'text-purple-400'
+                          : item.id === 'whatsapp'
+                            ? 'text-emerald-400'
+                            : 'text-white') 
+                  : 'text-zinc-500 group-hover:text-zinc-400'
+              }`} />
               <span className="text-xs">{item.label}</span>
             </button>
           ))}

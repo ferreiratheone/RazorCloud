@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS public.organizations (
   phone TEXT,
   logo_url TEXT,
   plans_enabled BOOLEAN NOT NULL DEFAULT true,
+  products_enabled BOOLEAN NOT NULL DEFAULT true,
+  whatsapp_auto_enabled BOOLEAN NOT NULL DEFAULT false,
+  whatsapp_api_url TEXT,
+  whatsapp_api_instance TEXT,
+  whatsapp_api_token TEXT,
+  whatsapp_reminder_hours INT NOT NULL DEFAULT 2,
+  whatsapp_msg_confirmation TEXT,
+  whatsapp_msg_reminder TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -57,7 +65,24 @@ CREATE TABLE IF NOT EXISTS public.services (
 
 CREATE INDEX IF NOT EXISTS idx_services_org ON public.services (organization_id);
 
--- D. TABELA SCHEDULES (Horários de Funcionamento)
+-- D. TABELA PRODUCTS (Vitrine de Produtos & Adicionais da Barbearia)
+CREATE TABLE IF NOT EXISTS public.products (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+  category TEXT NOT NULL DEFAULT 'Geral',
+  image_url TEXT,
+  stock INT NOT NULL DEFAULT 50,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_products_org ON public.products (organization_id);
+
+-- E. TABELA SCHEDULES (Horários de Funcionamento)
 CREATE TABLE IF NOT EXISTS public.schedules (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -72,7 +97,7 @@ CREATE TABLE IF NOT EXISTS public.schedules (
 
 CREATE INDEX IF NOT EXISTS idx_schedules_org ON public.schedules (organization_id);
 
--- E. TABELA APPOINTMENTS (Agendamentos)
+-- F. TABELA APPOINTMENTS (Agendamentos)
 CREATE TABLE IF NOT EXISTS public.appointments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -87,6 +112,8 @@ CREATE TABLE IF NOT EXISTS public.appointments (
   price NUMERIC(10,2) NOT NULL,
   notes TEXT,
   is_subscription BOOLEAN NOT NULL DEFAULT false,
+  products JSONB,
+  products_total NUMERIC(10,2) DEFAULT 0.00,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_end_after_start CHECK (end_time > start_time)
@@ -94,7 +121,7 @@ CREATE TABLE IF NOT EXISTS public.appointments (
 
 CREATE INDEX IF NOT EXISTS idx_appointments_org_date ON public.appointments (organization_id, start_time);
 
--- F. TABELA MEMBERSHIP_PLANS (Planos Mensais / Clube VIP)
+-- G. TABELA MEMBERSHIP_PLANS (Planos Mensais / Clube VIP)
 CREATE TABLE IF NOT EXISTS public.membership_plans (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -108,7 +135,7 @@ CREATE TABLE IF NOT EXISTS public.membership_plans (
 
 CREATE INDEX IF NOT EXISTS idx_plans_org ON public.membership_plans (organization_id);
 
--- G. TABELA CUSTOMER_SUBSCRIPTIONS (Assinantes do Clube VIP)
+-- H. TABELA CUSTOMER_SUBSCRIPTIONS (Assinantes do Clube VIP)
 CREATE TABLE IF NOT EXISTS public.customer_subscriptions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -131,6 +158,7 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_org_phone ON public.customer_subscr
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.membership_plans ENABLE ROW LEVEL SECURITY;
@@ -157,6 +185,7 @@ $$;
 -- A. Limpeza de políticas antigas
 DROP POLICY IF EXISTS "Public Read Organizations" ON public.organizations;
 DROP POLICY IF EXISTS "Public Read Services" ON public.services;
+DROP POLICY IF EXISTS "Public Read Products" ON public.products;
 DROP POLICY IF EXISTS "Public Read Users" ON public.users;
 DROP POLICY IF EXISTS "Public Read Barbers" ON public.users;
 DROP POLICY IF EXISTS "Public Read Schedules" ON public.schedules;
@@ -165,6 +194,7 @@ DROP POLICY IF EXISTS "Public Read Appointments" ON public.appointments;
 DROP POLICY IF EXISTS "Public Read Plans" ON public.membership_plans;
 DROP POLICY IF EXISTS "Public Read Active Plans" ON public.membership_plans;
 DROP POLICY IF EXISTS "Public Read Subscriptions" ON public.customer_subscriptions;
+DROP POLICY IF EXISTS "Public Read Subscriptions Verification" ON public.customer_subscriptions;
 
 DROP POLICY IF EXISTS "Authenticated Manage Org" ON public.organizations;
 DROP POLICY IF EXISTS "Tenant Manage Own Organization" ON public.organizations;
@@ -172,6 +202,8 @@ DROP POLICY IF EXISTS "Authenticated Manage Users" ON public.users;
 DROP POLICY IF EXISTS "Tenant Manage Own Team" ON public.users;
 DROP POLICY IF EXISTS "Authenticated Manage Services" ON public.services;
 DROP POLICY IF EXISTS "Tenant Manage Own Services" ON public.services;
+DROP POLICY IF EXISTS "Authenticated Manage Products" ON public.products;
+DROP POLICY IF EXISTS "Tenant Manage Own Products" ON public.products;
 DROP POLICY IF EXISTS "Authenticated Manage Schedules" ON public.schedules;
 DROP POLICY IF EXISTS "Tenant Manage Own Schedules" ON public.schedules;
 DROP POLICY IF EXISTS "Authenticated Manage Appointments" ON public.appointments;
@@ -186,6 +218,9 @@ CREATE POLICY "Public Read Organizations" ON public.organizations
   FOR SELECT TO anon, authenticated USING (true);
 
 CREATE POLICY "Public Read Services" ON public.services
+  FOR SELECT TO anon, authenticated USING (active = true);
+
+CREATE POLICY "Public Read Products" ON public.products
   FOR SELECT TO anon, authenticated USING (active = true);
 
 CREATE POLICY "Public Read Barbers" ON public.users
@@ -215,6 +250,11 @@ CREATE POLICY "Tenant Manage Own Team" ON public.users
   WITH CHECK (organization_id = public.get_auth_org_id());
 
 CREATE POLICY "Tenant Manage Own Services" ON public.services
+  FOR ALL TO authenticated
+  USING (organization_id = public.get_auth_org_id())
+  WITH CHECK (organization_id = public.get_auth_org_id());
+
+CREATE POLICY "Tenant Manage Own Products" ON public.products
   FOR ALL TO authenticated
   USING (organization_id = public.get_auth_org_id())
   WITH CHECK (organization_id = public.get_auth_org_id());
@@ -263,8 +303,8 @@ BEGIN
     counter := counter + 1;
   END LOOP;
 
-  INSERT INTO public.organizations (name, slug)
-  VALUES (shop_name, final_slug)
+  INSERT INTO public.organizations (name, slug, products_enabled, plans_enabled)
+  VALUES (shop_name, final_slug, true, true)
   RETURNING id INTO new_org_id;
 
   INSERT INTO public.users (id, organization_id, email, full_name, role)
@@ -290,6 +330,12 @@ BEGIN
   VALUES
     (new_org_id, 'Plano Silver (Quinzenal)', '2 cortes de cabelo por mês', 70.00, 2),
     (new_org_id, 'Plano Gold (Semanal VIP)', '4 cortes de cabelo por mês', 120.00, 4);
+
+  INSERT INTO public.products (organization_id, name, description, price, category, stock)
+  VALUES
+    (new_org_id, 'Pomada Modeladora Efeito Matte 100g', 'Fixação forte e acabamento natural sem brilho.', 35.00, 'Pomadas & Ceras', 50),
+    (new_org_id, 'Óleo Hidratante para Barba 30ml', 'Fragrância amadeirada com óleo de argan.', 40.00, 'Barba & Cuidado', 30),
+    (new_org_id, 'Cerveja Artesanal IPA 355ml', 'Cerveja gelada servida durante o atendimento.', 12.00, 'Bebidas', 100);
 
   RETURN NEW;
 END;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Clock, 
@@ -15,10 +15,14 @@ import {
   ChevronLeft, 
   Share2, 
   Instagram,
-  Crown
+  Crown,
+  ShoppingBag,
+  Plus,
+  Minus,
+  Check
 } from 'lucide-react';
 import { DataService, getLocalDateString } from '@/src/lib/data-service';
-import type { Organization, Service, UserProfile, TimeSlot, CustomerSubscription } from '@/src/types/database';
+import type { Organization, Service, UserProfile, TimeSlot, CustomerSubscription, Product } from '@/src/types/database';
 
 interface BookingWizardProps {
   slug?: string;
@@ -36,6 +40,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   const [tenant, setTenant] = useState<Organization | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [professionals, setProfessionals] = useState<UserProfile[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
   // Fluxo em Etapas (1: Serviço, 2: Profissional [se múltiplos], 3: Horário, 4: Confirmar)
   const [step, setStep] = useState(1);
@@ -48,6 +53,9 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState<boolean>(false);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+
+  // Produtos Adicionados pelo Cliente (Upsell)
+  const [selectedProductQuantities, setSelectedProductQuantities] = useState<Record<string, number>>({});
 
   // Formulário & Memória do Cliente
   const [clientName, setClientName] = useState('');
@@ -70,7 +78,6 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
 
     const handlePopState = (e: PopStateEvent) => {
       e.preventDefault();
-      // Ao invés de voltar para o admin ou sair, retrocede o passo do agendamento
       if (step > 1) {
         setDirection(-1);
         if (professionals.length <= 1 && step === 3) {
@@ -108,7 +115,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   }, []);
 
   // Gerar datas dos próximos 7 dias
-  const dateOptions = React.useMemo(() => {
+  const dateOptions = useMemo(() => {
     const dates = [];
     const today = new Date();
     for (let i = 0; i < 7; i++) {
@@ -121,70 +128,82 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         day: dayLabel,
         date: dateFormatted,
         rawDate: d,
+        isoDate: getLocalDateString(d),
       });
     }
     return dates;
   }, []);
 
-  // Carregar Dados da Barbearia
+  // Carregar dados da Barbearia
   useEffect(() => {
-    async function loadTenantData() {
+    async function loadShopData() {
       setLoading(true);
       try {
         const org = await DataService.getOrganizationBySlug(slug);
         if (org) {
           setTenant(org);
-          const [servList, teamList] = await Promise.all([
+          const [srvList, teamList, prodList] = await Promise.all([
             DataService.getServices(org.id),
             DataService.getTeam(org.id),
+            DataService.getProducts(org.id),
           ]);
-          setServices(servList.filter(s => s.active));
-          
-          const activeTeam = teamList.filter(u => u.active !== false);
-          setProfessionals(activeTeam);
-
-          if (activeTeam.length === 1) {
-            setSelectedProfessionalId(activeTeam[0].id);
-          }
+          setServices(srvList.filter(s => s.active));
+          setProfessionals(teamList.filter(p => p.active !== false));
+          setProducts(prodList.filter(p => p.active !== false));
         } else {
-          setTenant(null);
+          // Fallback seguro
+          const fallbackOrg: Organization = {
+            id: 'org-main',
+            name: 'Ferreira Barber',
+            slug: 'ferreirabarber',
+            address: 'Av. Paulista, 1000 - Jardins, São Paulo',
+            phone: '(11) 99999-8888',
+            plans_enabled: true,
+            products_enabled: true,
+          };
+          setTenant(fallbackOrg);
+          const [srvList, teamList, prodList] = await Promise.all([
+            DataService.getServices(fallbackOrg.id),
+            DataService.getTeam(fallbackOrg.id),
+            DataService.getProducts(fallbackOrg.id),
+          ]);
+          setServices(srvList.filter(s => s.active));
+          setProfessionals(teamList.filter(p => p.active !== false));
+          setProducts(prodList.filter(p => p.active !== false));
         }
-      } catch (err) {
-        console.error('Erro ao carregar dados da barbearia:', err);
+      } catch (e) {
+        console.error('Erro ao carregar dados da barbearia:', e);
       } finally {
         setLoading(false);
       }
     }
-    loadTenantData();
+
+    loadShopData();
   }, [slug]);
 
-  // Verificar se o cliente possui Plano Mensal / Assinatura Ativa
+  // Verificar se o cliente é assinante VIP do salão
   useEffect(() => {
-    async function checkSub() {
-      if (!tenant || !clientPhone || clientPhone.replace(/\D/g, '').length < 8) {
-        setActiveSubscription(null);
-        setIsSubBooking(false);
-        return;
-      }
-      try {
+    async function checkSubscription() {
+      if (tenant && clientPhone.length >= 10) {
         const sub = await DataService.checkClientSubscription(tenant.id, clientPhone);
-        if (sub && sub.status === 'active' && sub.cuts_used < sub.cuts_total) {
+        if (sub && sub.cuts_used < sub.cuts_total) {
           setActiveSubscription(sub);
           setIsSubBooking(true);
         } else {
-          setActiveSubscription(sub || null);
+          setActiveSubscription(null);
           setIsSubBooking(false);
         }
-      } catch (e) {
+      } else {
         setActiveSubscription(null);
+        setIsSubBooking(false);
       }
     }
 
-    const timer = setTimeout(checkSub, 350);
+    const timer = setTimeout(checkSubscription, 300);
     return () => clearTimeout(timer);
-  }, [tenant?.id, clientPhone]);
+  }, [clientPhone, tenant]);
 
-  // Recalcular horários disponíveis
+  // Carregar slots de horário disponíveis
   useEffect(() => {
     async function fetchSlots() {
       if (!tenant || !selectedServiceId) return;
@@ -213,6 +232,36 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
 
   const selectedService = services.find(s => s.id === selectedServiceId);
   const selectedProfessional = professionals.find(p => p.id === selectedProfessionalId);
+
+  // Lista de produtos selecionados
+  const selectedProductsList = useMemo(() => {
+    return Object.entries(selectedProductQuantities)
+      .map(([id, qty]) => {
+        const prod = products.find(p => p.id === id);
+        return prod ? { product: prod, quantity: qty } : null;
+      })
+      .filter(Boolean) as { product: Product; quantity: number }[];
+  }, [selectedProductQuantities, products]);
+
+  const productsTotal = useMemo(() => {
+    return selectedProductsList.reduce((acc, item) => acc + (Number(item.product.price) * item.quantity), 0);
+  }, [selectedProductsList]);
+
+  const baseServicePrice = (activeSubscription && isSubBooking) ? 0 : Number(selectedService?.price || 0);
+  const finalTotalPrice = baseServicePrice + productsTotal;
+
+  function toggleProductQuantity(prodId: string, delta: number) {
+    setSelectedProductQuantities(prev => {
+      const current = prev[prodId] || 0;
+      const next = Math.max(0, current + delta);
+      if (next === 0) {
+        const copy = { ...prev };
+        delete copy[prodId];
+        return copy;
+      }
+      return { ...prev, [prodId]: next };
+    });
+  }
 
   const totalDisplaySteps = isSingleBarber ? 3 : 4;
   const currentDisplayStep = isSingleBarber 
@@ -262,9 +311,8 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
 
       const startTime = new Date(selectedSlot.isoString);
       const endTime = new Date(startTime.getTime() + selectedService.duration * 60 * 1000);
-      const finalPrice = (activeSubscription && isSubBooking) ? 0 : selectedService.price;
 
-      await DataService.createAppointment({
+      const createdAppointment = await DataService.createAppointment({
         organization_id: tenant.id,
         service_id: selectedService.id,
         user_id: barberId,
@@ -273,13 +321,38 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         status: 'confirmed',
-        price: finalPrice,
+        price: finalTotalPrice,
         is_subscription: Boolean(activeSubscription && isSubBooking),
+        products: selectedProductsList.map(p => ({
+          product_id: p.product.id,
+          name: p.product.name,
+          price: p.product.price,
+          quantity: p.quantity,
+        })),
+        products_total: productsTotal,
       });
 
       // Debitar 1 corte do plano do assinante se aplicável
       if (activeSubscription && isSubBooking) {
         await DataService.useSubscriptionCut(activeSubscription.id, tenant.id);
+      }
+
+      // Disparar WhatsApp Automático se habilitado na barbearia
+      if (tenant.whatsapp_auto_enabled) {
+        const cleanPhone = clientPhone.replace(/\D/g, '');
+        const autoMsg = (tenant.whatsapp_msg_confirmation || 'Fala {cliente}! Seu agendamento foi confirmado para {data} às {horario} na {barbearia}. Te esperamos! ✂️')
+          .replace('{cliente}', clientName.trim())
+          .replace('{horario}', selectedSlot.time)
+          .replace('{data}', dateOptions[selectedDateIndex].date)
+          .replace('{barbearia}', tenant.name)
+          .replace('{servico}', selectedService.name)
+          .replace('{valor}', `R$ ${finalTotalPrice.toFixed(2)}`);
+
+        DataService.sendAutomatedWhatsAppMessage({
+          org: tenant,
+          phone: cleanPhone,
+          message: autoMsg,
+        }).catch(err => console.warn('Erro ao disparar automação WhatsApp:', err));
       }
 
       setIsSuccess(true);
@@ -302,91 +375,97 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
 
   if (!tenant) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-50 flex flex-col items-center justify-center p-4 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4">
-          <Scissors className="w-8 h-8 text-zinc-600" />
+      <div className="min-h-screen bg-zinc-950 text-zinc-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4">
+          <Scissors className="w-6 h-6 text-zinc-400" />
         </div>
-        <h2 className="text-xl font-bold text-white mb-2">Barbearia não encontrada</h2>
-        <p className="text-zinc-400 text-xs max-w-sm mb-6">
-          Verifique se o link foi digitado corretamente ou contate o estabelecimento.
+        <h1 className="text-lg font-bold text-white mb-1">Barbearia Não Encontrada</h1>
+        <p className="text-xs text-zinc-400 max-w-sm">
+          O link de agendamento pode estar incorreto ou a barbearia ainda não configurou seu endereço público.
         </p>
       </div>
     );
   }
 
-  // --- TELA DE SUCESSO DO AGENDAMENTO ---
-  if (isSuccess && selectedService && selectedSlot) {
-    const formattedDate = dateOptions[selectedDateIndex].date;
-    const barberName = selectedProfessional ? selectedProfessional.full_name : (professionals[0]?.full_name || 'Barbeiro');
-    const targetPhone = (selectedProfessional?.phone || tenant.phone || '').replace(/\D/g, '');
+  // --- TELA DE SUCESSO ---
+  if (isSuccess) {
+    const barberName = selectedProfessional?.full_name || 'Profissional';
+    const cleanPhone = (tenant.phone || '').replace(/\D/g, '');
     
-    const isVip = activeSubscription && isSubBooking;
-    const priceText = isVip ? 'R$ 0,00 (Incluso no Plano VIP)' : `R$ ${Number(selectedService.price).toFixed(2)}`;
-    const whatsAppMessage = `💈 *Novo Agendamento Confirmado!*\n\n✂️ *Serviço:* ${selectedService.name}\n💰 *Valor:* ${priceText}\n📅 *Data:* ${formattedDate} às ${selectedSlot.time}\n👤 *Cliente:* ${clientName.trim()}\n📱 *WhatsApp:* ${clientPhone.trim()}\n💈 *Profissional:* ${barberName}\n${isVip ? '👑 *Plano VIP:* Atendimento incluso no Plano Mensal\n' : ''}\nAgendamento realizado pelo site oficial da ${tenant.name}!`;
+    const productsText = selectedProductsList.length > 0
+      ? `\n🛍️ *Produtos Adicionais:*\n` + selectedProductsList.map(p => `• ${p.quantity}x ${p.product.name} (R$ ${(p.product.price * p.quantity).toFixed(2)})`).join('\n')
+      : '';
+
+    const priceText = activeSubscription && isSubBooking && productsTotal === 0
+      ? 'R$ 0,00 (Incluso no Plano VIP)'
+      : `R$ ${finalTotalPrice.toFixed(2)}`;
+
+    const whatsappText = `💈 *Novo Agendamento Confirmado!*\n\n✂️ *Serviço:* ${selectedService?.name}\n💰 *Valor:* ${priceText}${productsText}\n📅 *Data:* ${dateOptions[selectedDateIndex]?.date} às ${selectedSlot?.time}\n👤 *Cliente:* ${clientName}\n📱 *WhatsApp:* ${clientPhone}\n💈 *Profissional:* ${barberName}\n\nAgendamento realizado pelo site oficial da ${tenant.name}!`;
     
-    const whatsappUrl = targetPhone 
-      ? `https://wa.me/55${targetPhone}?text=${encodeURIComponent(whatsAppMessage)}`
-      : `https://wa.me/?text=${encodeURIComponent(whatsAppMessage)}`;
+    const whatsappUrl = cleanPhone
+      ? `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(whatsappText)}`
+      : `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
 
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-50 flex flex-col items-center justify-center p-4 sm:p-6 selection:bg-zinc-800 selection:text-white">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl space-y-6"
-        >
-          <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-lg">
-            <CheckCircle2 className="w-9 h-9" />
+      <div className="min-h-screen bg-zinc-950 text-zinc-50 flex flex-col items-center justify-between p-4 selection:bg-zinc-800 selection:text-white">
+        <div className="w-full max-w-md my-auto py-8 text-center space-y-6">
+          <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto shadow-2xl">
+            <CheckCircle2 className="w-8 h-8" />
           </div>
 
-          <div>
-            <h2 className="text-2xl font-bold text-white tracking-tight">Agendamento Confirmado!</h2>
-            <p className="text-xs text-zinc-400 mt-1.5">
-              Seu horário foi reservado com sucesso na <strong className="text-white">{tenant.name}</strong>.
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold tracking-tight text-white">Agendamento Confirmado!</h2>
+            <p className="text-xs text-zinc-400 max-w-xs mx-auto">
+              Seu horário está reservado com sucesso na <strong>{tenant.name}</strong>.
             </p>
           </div>
 
-          {/* Resumo do Atendimento */}
-          <div className="bg-zinc-950 border border-zinc-800/90 rounded-2xl p-4 text-left space-y-2.5 text-xs">
-            <div className="flex justify-between border-b border-zinc-800/60 pb-2">
+          {/* Cartão do Comprovante */}
+          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 text-left text-xs space-y-3 shadow-xl backdrop-blur-md">
+            <div className="flex justify-between border-b border-zinc-800/80 pb-2.5">
               <span className="text-zinc-500">Serviço:</span>
-              <span className="font-bold text-white">{selectedService.name}</span>
+              <span className="font-bold text-white">{selectedService?.name}</span>
             </div>
-            <div className="flex justify-between border-b border-zinc-800/60 pb-2">
+
+            {selectedProductsList.length > 0 && (
+              <div className="border-b border-zinc-800/80 pb-2.5 space-y-1">
+                <span className="text-zinc-500 block">Produtos para Retirar:</span>
+                {selectedProductsList.map((p, idx) => (
+                  <div key={idx} className="flex justify-between text-zinc-300">
+                    <span>{p.quantity}x {p.product.name}</span>
+                    <span className="font-semibold text-purple-400">R$ {(p.product.price * p.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-between border-b border-zinc-800/80 pb-2.5">
               <span className="text-zinc-500">Data e Horário:</span>
-              <span className="font-bold text-emerald-400">{formattedDate} às {selectedSlot.time}</span>
+              <span className="font-bold text-emerald-400">{dateOptions[selectedDateIndex]?.date} às {selectedSlot?.time}</span>
             </div>
-            <div className="flex justify-between border-b border-zinc-800/60 pb-2">
+
+            <div className="flex justify-between border-b border-zinc-800/80 pb-2.5">
               <span className="text-zinc-500">Profissional:</span>
-              <span className="font-medium text-white">{barberName}</span>
+              <span className="font-bold text-white">{barberName}</span>
             </div>
-            <div className="flex justify-between border-b border-zinc-800/60 pb-2">
-              <span className="text-zinc-500">Cliente:</span>
-              <span className="font-medium text-white">{clientName}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">Valor Estimado:</span>
-              <span className="font-bold text-white">
-                {isVip ? (
-                  <span className="text-amber-400 flex items-center gap-1">
-                    <Crown className="w-3.5 h-3.5" /> R$ 0,00 (Incluso no Plano VIP)
-                  </span>
-                ) : (
-                  `R$ ${Number(selectedService.price).toFixed(2)}`
-                )}
+
+            <div className="flex justify-between pt-0.5">
+              <span className="text-zinc-500">Valor Total:</span>
+              <span className="font-bold text-emerald-400 text-sm">
+                {priceText}
               </span>
             </div>
           </div>
 
-          {/* Botão de Envio para o WhatsApp do Barbeiro */}
-          <div className="space-y-3 pt-1">
-            <a 
+          {/* Botão de WhatsApp */}
+          <div className="space-y-3 pt-2">
+            <a
               href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 px-4 rounded-2xl transition-all text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50"
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold py-3.5 px-4 rounded-2xl text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
             >
-              <Share2 className="w-4 h-4" /> Enviar Comprovante no WhatsApp do Barbeiro
+              <Share2 className="w-4 h-4" /> Enviar Comprovante no WhatsApp
             </a>
 
             <button
@@ -394,14 +473,30 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
                 setIsSuccess(false);
                 setStep(1);
                 setSelectedServiceId(null);
+                setSelectedProfessionalId(null);
                 setSelectedSlot(null);
+                setSelectedProductQuantities({});
               }}
-              className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-semibold py-3 rounded-xl transition-colors text-xs"
+              className="w-full text-zinc-500 hover:text-zinc-300 text-xs py-2 transition-colors"
             >
-              Fazer outro agendamento
+              Fazer Outro Agendamento
             </button>
           </div>
-        </motion.div>
+        </div>
+
+        {/* Footer */}
+        <footer className="w-full text-center pb-2 text-[11px] text-zinc-600">
+          Site desenvolvido por{' '}
+          <a 
+            href="https://instagram.com/ferreiraatheone" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-zinc-400 hover:text-pink-400 font-semibold inline-flex items-center gap-1 transition-colors"
+          >
+            <Instagram className="w-3 h-3 text-pink-500" />
+            @ferreiraatheone
+          </a>
+        </footer>
       </div>
     );
   }
@@ -409,100 +504,84 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   // --- ETAPA 1: ESCOLHA DO SERVIÇO ---
   const renderStep1 = () => (
     <div className="space-y-3 w-full">
-      {hasRememberedClient && clientName && (
-        <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-2xl flex items-center justify-between text-xs mb-2">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-zinc-300">Olá, <strong className="text-white">{clientName}</strong>!</span>
-          </div>
-          <span className="text-[10px] text-emerald-400 font-semibold">Agendamento Rápido</span>
-        </div>
-      )}
-
       {services.length === 0 ? (
-        <div className="p-8 text-center border border-dashed border-zinc-800 rounded-2xl">
-          <Scissors className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
-          <p className="text-zinc-300 font-semibold text-xs">Nenhum serviço cadastrado ainda.</p>
-          <p className="text-zinc-500 text-[11px] mt-1">Acesse o painel administrativo para cadastrar cortes e serviços.</p>
+        <div className="text-center py-8 text-zinc-500 text-xs">
+          Nenhum serviço disponível no momento.
         </div>
       ) : (
-        services.map((service) => (
-          <button
-            key={service.id}
-            id={`service-card-${service.id}`}
-            onClick={() => {
-              setSelectedServiceId(service.id);
-              if (isSingleBarber) {
-                setSelectedProfessionalId(professionals[0]?.id || 'owner-user');
+        services.map((srv) => {
+          const isSelected = selectedServiceId === srv.id;
+          return (
+            <button
+              key={srv.id}
+              onClick={() => {
+                setSelectedServiceId(srv.id);
                 setDirection(1);
-                setStep(3); // Pula direto para Data e Horário
-              } else {
-                setDirection(1);
-                setStep(2);
-              }
-            }}
-            className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 flex items-start justify-between
-              ${selectedServiceId === service.id 
-                ? 'bg-zinc-800 border-white/40 shadow-sm' 
-                : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/60 hover:border-zinc-700'
-              }`}
-          >
-            <div className="flex-1 pr-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Scissors className="w-3.5 h-3.5 text-zinc-400" />
-                <h3 className="font-bold text-sm text-zinc-100">{service.name}</h3>
+                if (isSingleBarber) {
+                  setSelectedProfessionalId(professionals[0]?.id || 'any');
+                  setStep(3); // Pula direto para o horário
+                } else {
+                  setStep(2);
+                }
+              }}
+              className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between group
+                ${isSelected 
+                  ? 'bg-zinc-800/90 border-zinc-400 shadow-md ring-1 ring-white/20' 
+                  : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/60 hover:border-zinc-700'
+                }`}
+            >
+              <div className="space-y-1">
+                <h3 className="font-bold text-sm text-white group-hover:text-zinc-100">{srv.name}</h3>
+                {srv.description && (
+                  <p className="text-xs text-zinc-400 line-clamp-1">{srv.description}</p>
+                )}
+                <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+                  <Clock className="w-3 h-3" />
+                  <span>{srv.duration} min</span>
+                </div>
               </div>
-              {service.description && (
-                <p className="text-xs text-zinc-400 line-clamp-2 mb-2">{service.description}</p>
-              )}
-              <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-                <Clock className="w-3 h-3 text-zinc-500" /> {service.duration} min
-              </span>
-            </div>
 
-            <div className="text-right shrink-0">
-              <span className="text-base font-bold text-white block">
-                R$ {Number(service.price).toFixed(2)}
-              </span>
-            </div>
-          </button>
-        ))
+              <div className="text-right shrink-0 ml-3">
+                <span className="font-bold text-sm text-emerald-400 block">
+                  R$ {Number(srv.price).toFixed(2)}
+                </span>
+                <span className="text-[10px] text-zinc-400 font-semibold group-hover:text-white">
+                  Escolher →
+                </span>
+              </div>
+            </button>
+          );
+        })
       )}
     </div>
   );
 
-  // --- ETAPA 2: ESCOLHA DO PROFISSIONAL (SOMENTE SE HOUVER 2+ BARBEIROS) ---
+  // --- ETAPA 2: ESCOLHA DO PROFISSIONAL ---
   const renderStep2 = () => (
     <div className="space-y-3 w-full">
-      {professionals.length > 1 && (
-        <button
-          onClick={() => {
-            setSelectedProfessionalId('any');
-            setDirection(1);
-            setStep(3);
-          }}
-          className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between
-            ${selectedProfessionalId === 'any' 
-              ? 'bg-zinc-800 border-white/40 shadow-sm' 
-              : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/60 hover:border-zinc-700'
-            }`}
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-amber-400" />
-            </div>
-            <div>
-              <h3 className="font-bold text-sm text-white">Qualquer Profissional</h3>
-              <p className="text-xs text-zinc-400">Primeiro horário livre com qualquer barbeiro disponível</p>
-            </div>
+      <button
+        onClick={() => {
+          setSelectedProfessionalId('any');
+          setDirection(1);
+          setStep(3);
+        }}
+        className={`w-full text-left p-3.5 rounded-2xl border transition-all duration-200 flex items-center justify-between
+          ${selectedProfessionalId === 'any' 
+            ? 'bg-zinc-800 border-zinc-400 shadow-md ring-1 ring-white/20' 
+            : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/60'
+          }`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-300">
+            <Sparkles className="w-4 h-4 text-amber-400" />
           </div>
-          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0
-            ${selectedProfessionalId === 'any' ? 'border-white bg-white' : 'border-zinc-700'}
-          `}>
-            {selectedProfessionalId === 'any' && <CheckCircle2 className="w-3.5 h-3.5 text-black" />}
+          <div>
+            <h3 className="font-bold text-xs text-white">Qualquer Profissional</h3>
+            <p className="text-[10px] text-zinc-400">Primeiro horário disponível</p>
           </div>
-        </button>
-      )}
+        </div>
+        <ArrowRight className="w-4 h-4 text-zinc-500" />
+      </button>
 
       {professionals.map((barber) => (
         <button
@@ -512,34 +591,26 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
             setDirection(1);
             setStep(3);
           }}
-          className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between
+          className={`w-full text-left p-3.5 rounded-2xl border transition-all duration-200 flex items-center justify-between
             ${selectedProfessionalId === barber.id 
-              ? 'bg-zinc-800 border-white/40 shadow-sm' 
-              : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/60 hover:border-zinc-700'
+              ? 'bg-zinc-800 border-zinc-400 shadow-md ring-1 ring-white/20' 
+              : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/60'
             }`}
         >
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-3">
             {barber.avatar_url ? (
-              <img 
-                src={barber.avatar_url} 
-                alt={barber.full_name} 
-                className="w-11 h-11 rounded-xl object-cover border border-zinc-700 aspect-square" 
-              />
+              <img src={barber.avatar_url} alt={barber.full_name} className="w-10 h-10 rounded-xl object-cover" />
             ) : (
-              <div className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-300">
+              <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-300">
                 {barber.full_name.substring(0, 2).toUpperCase()}
               </div>
             )}
             <div>
-              <h3 className="font-bold text-sm text-white">{barber.full_name}</h3>
-              <p className="text-xs text-zinc-400 capitalize">{barber.role === 'owner' ? 'Proprietário' : 'Barbeiro'}</p>
+              <h3 className="font-bold text-xs text-white">{barber.full_name}</h3>
+              <p className="text-[10px] text-zinc-400 capitalize">{barber.role === 'owner' ? 'Especialista / Dono' : 'Barbeiro'}</p>
             </div>
           </div>
-          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0
-            ${selectedProfessionalId === barber.id ? 'border-white bg-white' : 'border-zinc-700'}
-          `}>
-            {selectedProfessionalId === barber.id && <CheckCircle2 className="w-3.5 h-3.5 text-black" />}
-          </div>
+          <ArrowRight className="w-4 h-4 text-zinc-500" />
         </button>
       ))}
 
@@ -548,54 +619,54 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
           setDirection(-1);
           setStep(1);
         }}
-        className="w-full text-xs text-zinc-400 hover:text-white py-2 flex items-center justify-center gap-1 transition-colors"
+        className="w-full text-xs text-zinc-400 hover:text-white py-1 flex items-center justify-center gap-1 transition-colors mt-2"
       >
-        <ChevronLeft className="w-4 h-4" /> Voltar
+        <ChevronLeft className="w-4 h-4" /> Voltar aos serviços
       </button>
     </div>
   );
 
-  // --- ETAPA 3: ESCOLHA DA DATA E HORÁRIO ---
+  // --- ETAPA 3: DATA E HORÁRIO ---
   const renderStep3 = () => (
     <div className="space-y-4 w-full">
-      {/* Carrossel de Datas */}
-      <div>
-        <label className="text-xs text-zinc-400 font-semibold block mb-2">Selecione o Dia</label>
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-          {dateOptions.map((d, index) => (
-            <button
-              key={index}
-              onClick={() => setSelectedDateIndex(index)}
-              className={`flex-1 min-w-[64px] py-2.5 px-2 rounded-2xl border text-center transition-all shrink-0
-                ${selectedDateIndex === index 
-                  ? 'bg-white text-zinc-950 font-bold border-white shadow-md' 
-                  : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                }`}
-            >
-              <span className="text-[10px] uppercase font-bold block">{d.day}</span>
-              <span className="text-xs block mt-0.5">{d.date}</span>
-            </button>
-          ))}
-        </div>
+      {/* Seletor Horizontal de Dias */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full scrollbar-none">
+        {dateOptions.map((opt, idx) => (
+          <button
+            key={idx}
+            onClick={() => setSelectedDateIndex(idx)}
+            className={`flex-1 min-w-[64px] py-3 px-2 rounded-2xl border text-center transition-all duration-200 flex flex-col items-center justify-center
+              ${selectedDateIndex === idx 
+                ? 'bg-white text-zinc-950 font-bold border-white shadow-lg' 
+                : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-400 hover:bg-zinc-800 hover:text-white'
+              }`}
+          >
+            <span className={`text-[10px] font-bold uppercase ${selectedDateIndex === idx ? 'text-zinc-950' : 'text-zinc-500'}`}>
+              {opt.day}
+            </span>
+            <span className="text-xs font-bold mt-0.5">{opt.date}</span>
+          </button>
+        ))}
       </div>
 
       {/* Grade de Horários */}
-      <div>
-        <label className="text-xs text-zinc-400 font-semibold block mb-2">Horários Disponíveis</label>
-        
+      <div className="pt-2">
+        <h3 className="text-xs font-bold text-zinc-300 mb-2 flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5 text-zinc-400" /> Horários Disponíveis
+        </h3>
+
         {loadingSlots ? (
-          <div className="py-12 text-center text-zinc-500">
-            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-zinc-400" />
+          <div className="py-10 text-center flex flex-col items-center justify-center text-zinc-500">
+            <Loader2 className="w-5 h-5 animate-spin text-zinc-400 mb-2" />
             <p className="text-xs">Buscando horários livres...</p>
           </div>
         ) : availableSlots.length === 0 ? (
-          <div className="py-8 text-center border border-dashed border-zinc-800 rounded-2xl">
-            <Clock className="w-6 h-6 text-zinc-600 mx-auto mb-1.5" />
-            <p className="text-xs text-zinc-400">Sem horários livres nesta data.</p>
-            <p className="text-[10px] text-zinc-500 mt-0.5">Por favor, escolha outro dia acima.</p>
+          <div className="py-8 text-center border border-dashed border-zinc-800 rounded-xl p-4">
+            <p className="text-xs text-zinc-400">Nenhum horário disponível para esta data.</p>
+            <p className="text-[10px] text-zinc-500 mt-1">Por favor, escolha outro dia acima.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1">
+          <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1">
             {availableSlots.map((slot, idx) => (
               <button
                 key={idx}
@@ -661,13 +732,88 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
               ✨ Saldo restante: {Math.max(0, activeSubscription.cuts_total - activeSubscription.cuts_used)} corte(s)
             </span>
             <span className="text-xs font-bold text-amber-400">
-              Valor: R$ 0,00 (Incluso)
+              Corte: R$ 0,00 (Incluso)
             </span>
           </div>
         </div>
       )}
 
-      {/* Resumo do Horário */}
+      {/* VITRINE DE PRODUTOS ADICIONAIS (UPSELL) */}
+      {tenant.products_enabled !== false && products.length > 0 && (
+        <div className="space-y-2.5 pt-1">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <ShoppingBag className="w-3.5 h-3.5 text-purple-400" />
+              Deseja retirar algum produto no salão?
+            </h4>
+            <span className="text-[10px] text-zinc-500 font-medium">Opcional</span>
+          </div>
+
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {products.map((prod) => {
+              const qty = selectedProductQuantities[prod.id] || 0;
+              return (
+                <div 
+                  key={prod.id}
+                  className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                    qty > 0 
+                      ? 'bg-purple-950/20 border-purple-500/40 shadow-sm' 
+                      : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center overflow-hidden shrink-0">
+                      {prod.image_url ? (
+                        <img src={prod.image_url} alt={prod.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <ShoppingBag className="w-4 h-4 text-zinc-600" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{prod.name}</p>
+                      <p className="text-[11px] font-semibold text-purple-400">
+                        + R$ {Number(prod.price).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    {qty === 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleProductQuantity(prod.id, 1)}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-bold transition-colors flex items-center gap-1 border border-zinc-700"
+                      >
+                        <Plus className="w-3 h-3" /> Adicionar
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1 bg-purple-500/20 border border-purple-500/30 rounded-lg p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleProductQuantity(prod.id, -1)}
+                          className="w-6 h-6 rounded bg-zinc-900 text-zinc-300 flex items-center justify-center hover:bg-zinc-800 transition-colors"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="text-xs font-bold text-white px-1.5">{qty}</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleProductQuantity(prod.id, 1)}
+                          className="w-6 h-6 rounded bg-purple-600 text-white flex items-center justify-center hover:bg-purple-500 transition-colors"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Resumo do Horário e Valores */}
       <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl p-4 text-xs space-y-2">
         <div className="flex justify-between border-b border-zinc-800/60 pb-2">
           <span className="text-zinc-500">Serviço:</span>
@@ -679,13 +825,23 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
             {dateOptions[selectedDateIndex]?.date} às {selectedSlot?.time || '--:--'}
           </span>
         </div>
-        <div className="flex justify-between">
+
+        {selectedProductsList.length > 0 && (
+          <div className="flex justify-between border-b border-zinc-800/60 pb-2">
+            <span className="text-zinc-500">Produtos Adicionais:</span>
+            <span className="font-bold text-purple-400">
+              + R$ {productsTotal.toFixed(2)} ({selectedProductsList.reduce((acc, p) => acc + p.quantity, 0)} itens)
+            </span>
+          </div>
+        )}
+
+        <div className="flex justify-between pt-1">
           <span className="text-zinc-500">Valor Total:</span>
-          <span className="font-bold text-white">
-            {activeSubscription && isSubBooking ? (
+          <span className="font-bold text-white text-sm">
+            {activeSubscription && isSubBooking && productsTotal === 0 ? (
               <span className="text-amber-400 font-bold">R$ 0,00 (Plano VIP)</span>
             ) : (
-              `R$ ${Number(selectedService?.price || 0).toFixed(2)}`
+              `R$ ${finalTotalPrice.toFixed(2)}`
             )}
           </span>
         </div>

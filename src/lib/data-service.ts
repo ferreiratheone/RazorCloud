@@ -7,7 +7,9 @@ import type {
   Appointment, 
   TimeSlot,
   MembershipPlan,
-  CustomerSubscription
+  CustomerSubscription,
+  Product,
+  FinancialMetrics
 } from '@/src/types/database';
 
 const LOCAL_STORAGE_KEY_PREFIX = 'razorcloud_';
@@ -70,6 +72,49 @@ export const DEFAULT_PLANS_FACTORY = (orgId: string): MembershipPlan[] => [
   },
 ];
 
+export const DEFAULT_PRODUCTS_FACTORY = (orgId: string): Product[] => [
+  {
+    id: 'prod-1-' + orgId,
+    organization_id: orgId,
+    name: 'Pomada Modeladora Efeito Matte 100g',
+    description: 'Fixação forte e acabamento natural sem brilho.',
+    price: 35.00,
+    category: 'Pomadas & Ceras',
+    stock: 50,
+    active: true,
+  },
+  {
+    id: 'prod-2-' + orgId,
+    organization_id: orgId,
+    name: 'Óleo Hidratante para Barba 30ml',
+    description: 'Fragrância amadeirada com óleo de argan e macadâmia.',
+    price: 40.00,
+    category: 'Barba & Cuidado',
+    stock: 30,
+    active: true,
+  },
+  {
+    id: 'prod-3-' + orgId,
+    organization_id: orgId,
+    name: 'Cerveja Artesanal IPA 355ml',
+    description: 'Cerveja artesanal gelada para degustar no salão.',
+    price: 12.00,
+    category: 'Bebidas',
+    stock: 100,
+    active: true,
+  },
+  {
+    id: 'prod-4-' + orgId,
+    organization_id: orgId,
+    name: 'Pente de Madeira Antiestático',
+    description: 'Alinha os fios e barba sem eletricidade estática.',
+    price: 20.00,
+    category: 'Acessórios',
+    stock: 25,
+    active: true,
+  },
+];
+
 export const DataService = {
   // --- AUTENTICAÇÃO E SESSÃO MULTI-DISPOSITIVOS ---
   async getCurrentUserProfile(): Promise<{ user: UserProfile | null; organization: Organization | null }> {
@@ -102,8 +147,6 @@ export const DataService = {
 
             if (orgData) {
               setLocalData('saved_org_' + authUserId, orgData);
-              setLocalData('current_user', userProfile);
-              setLocalData('current_org', orgData);
               return {
                 user: userProfile as UserProfile,
                 organization: orgData as Organization,
@@ -111,82 +154,66 @@ export const DataService = {
             }
           }
 
-          // 2. Se o perfil não existia no banco, provisiona no Supabase
-          try {
-            const { data: newOrg } = await supabase
-              .from('organizations')
-              .insert([{ name: shopName, slug: baseSlug }])
-              .select()
-              .maybeSingle();
-
-            if (newOrg) {
-              const { data: newUser } = await supabase
-                .from('users')
-                .upsert({
-                  id: authUserId,
-                  organization_id: newOrg.id,
-                  email: userEmail,
-                  full_name: fullName,
-                  role: 'owner',
-                })
-                .select()
-                .maybeSingle();
-
-              if (newUser) {
-                setLocalData('saved_org_' + authUserId, newOrg);
-                setLocalData('current_user', newUser);
-                setLocalData('current_org', newOrg);
-                return {
-                  user: newUser as UserProfile,
-                  organization: newOrg as Organization,
-                };
-              }
-            }
-          } catch (createErr) {
-            console.warn('Erro ao provisionar organização no Supabase:', createErr);
-          }
-
-          if (userSavedOrg) {
-            const cachedUser: UserProfile = {
-              id: authUserId,
-              organization_id: userSavedOrg.id,
-              email: userEmail,
-              full_name: fullName,
-              role: 'owner',
-              active: true,
-            };
-            return { user: cachedUser, organization: userSavedOrg };
-          }
-
-          const fallbackOrg: Organization = {
+          // 2. Se não existir no banco, cria o registro inicial
+          const newOrg: Organization = {
             id: authUserId,
             name: shopName,
             slug: baseSlug,
+            plans_enabled: true,
+            products_enabled: true,
+            created_at: new Date().toISOString(),
           };
-          const fallbackUser: UserProfile = {
+
+          const newUser: UserProfile = {
             id: authUserId,
-            organization_id: fallbackOrg.id,
+            organization_id: newOrg.id,
             email: userEmail,
             full_name: fullName,
             role: 'owner',
             active: true,
+            created_at: new Date().toISOString(),
           };
-          setLocalData('saved_org_' + authUserId, fallbackOrg);
-          setLocalData('current_user', fallbackUser);
-          setLocalData('current_org', fallbackOrg);
-          return { user: fallbackUser, organization: fallbackOrg };
+
+          try {
+            await supabase.from('organizations').upsert([newOrg]);
+            await supabase.from('users').upsert([newUser]);
+            await supabase.from('schedules').upsert(DEFAULT_SCHEDULES_FACTORY(newOrg.id));
+            await supabase.from('membership_plans').upsert(DEFAULT_PLANS_FACTORY(newOrg.id));
+            await supabase.from('products').upsert(DEFAULT_PRODUCTS_FACTORY(newOrg.id));
+          } catch (insertErr) {
+            console.warn('Inserção no Supabase em fallback:', insertErr);
+          }
+
+          setLocalData('saved_org_' + authUserId, newOrg);
+          return { user: newUser, organization: newOrg };
         }
       } catch (err) {
-        console.warn('Erro ao obter usuário do Supabase:', err);
+        console.warn('Erro na sessão do Supabase:', err);
       }
     }
 
-    const localUser = getLocalData<UserProfile | null>('current_user', null);
-    const localOrg = getLocalData<Organization | null>('current_org', null);
+    // Modo Local / Demonstração
+    const localUser = getLocalData<UserProfile | null>('current_user', {
+      id: 'user-owner',
+      organization_id: 'org-main',
+      full_name: 'Proprietário da Barbearia',
+      role: 'owner',
+      email: 'proprietario@barbearia.com',
+      active: true,
+    });
+
+    const localOrg = getLocalData<Organization | null>('current_org', {
+      id: 'org-main',
+      name: 'Ferreira Barber',
+      slug: 'ferreirabarber',
+      plans_enabled: true,
+      products_enabled: true,
+    });
+
     return { user: localUser, organization: localOrg };
   },
 
-  // --- ORGANIZAÇÃO (TENANT) ---
+  // --- ORGANIZAÇÕES (BARBEARIAS) ---
   async getOrganizationBySlug(slug: string): Promise<Organization | null> {
     if (isSupabaseConfigured()) {
       try {
@@ -238,6 +265,14 @@ export const DataService = {
       phone: org.phone,
       logo_url: org.logo_url,
       plans_enabled: org.plans_enabled,
+      products_enabled: org.products_enabled,
+      whatsapp_auto_enabled: org.whatsapp_auto_enabled,
+      whatsapp_api_url: org.whatsapp_api_url,
+      whatsapp_api_instance: org.whatsapp_api_instance,
+      whatsapp_api_token: org.whatsapp_api_token,
+      whatsapp_reminder_hours: org.whatsapp_reminder_hours,
+      whatsapp_msg_confirmation: org.whatsapp_msg_confirmation,
+      whatsapp_msg_reminder: org.whatsapp_msg_reminder,
       updated_at: new Date().toISOString(),
     };
 
@@ -258,67 +293,38 @@ export const DataService = {
             targetOrgId = userProfile.organization_id;
           }
 
-          let { data: updatedOrg } = await supabase
-            .from('organizations')
-            .update(payload)
-            .eq('id', targetOrgId)
-            .select()
-            .maybeSingle();
-
-          if (!updatedOrg) {
-            const { data: upsertedOrg } = await supabase
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetOrgId);
+          if (isUuid) {
+            const { data, error } = await supabase
               .from('organizations')
-              .upsert([{ id: targetOrgId, ...payload }])
+              .update(payload)
+              .eq('id', targetOrgId)
               .select()
-              .maybeSingle();
-            updatedOrg = upsertedOrg;
-          }
+              .single();
 
-          if (updatedOrg) {
-            await supabase.from('users').upsert({
-              id: authUserId,
-              organization_id: updatedOrg.id,
-              email: authData.user.email,
-              full_name: updatedOrg.name,
-              role: 'owner',
-            });
-
-            setLocalData('saved_org_' + authUserId, updatedOrg);
-            setLocalData('current_org', updatedOrg);
-
-            const allOrgs = getLocalData<Record<string, Organization>>('all_orgs', {});
-            allOrgs[updatedOrg.slug] = updatedOrg;
-            setLocalData('all_orgs', allOrgs);
-
-            return updatedOrg as Organization;
+            if (data && !error) {
+              setLocalData('saved_org_' + authUserId, data);
+              return data as Organization;
+            }
           }
         }
       } catch (e) {
-        console.error('Erro ao atualizar no Supabase:', e);
+        console.error('Erro ao atualizar organização no Supabase:', e);
       }
     }
 
-    const current = getLocalData<Organization>('current_org', org as Organization);
-    const merged = { ...current, ...org, ...payload };
-    
-    if (typeof window !== 'undefined') {
-      const rawUser = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + 'current_user');
-      if (rawUser) {
-        try {
-          const u = JSON.parse(rawUser);
-          if (u?.id) setLocalData('saved_org_' + u.id, merged);
-        } catch (e) {}
-      }
-    }
+    const currentOrg = getLocalData<Organization>('current_org', {
+      id: org.id,
+      name: org.name || 'Minha Barbearia',
+      slug: org.slug || 'minha-barbearia',
+    });
 
-    const allOrgs = getLocalData<Record<string, Organization>>('all_orgs', {});
-    if (merged.slug) allOrgs[merged.slug] = merged;
-    setLocalData('all_orgs', allOrgs);
-    setLocalData('current_org', merged);
-    return merged;
+    const updated = { ...currentOrg, ...org };
+    setLocalData('current_org', updated);
+    return updated;
   },
 
-  // --- SERVIÇOS ---
+  // --- SERVIÇOS DO CATÁLOGO ---
   async getServices(orgId: string): Promise<Service[]> {
     if (isSupabaseConfigured()) {
       try {
@@ -328,7 +334,7 @@ export const DataService = {
             .from('services')
             .select('*')
             .eq('organization_id', orgId)
-            .order('created_at', { ascending: true });
+            .order('name', { ascending: true });
 
           if (!error && Array.isArray(data) && data.length > 0) {
             setLocalData('services_' + orgId, data);
@@ -336,57 +342,68 @@ export const DataService = {
           }
         }
       } catch (e) {
-        console.warn('Erro ao carregar serviços do Supabase:', e);
+        console.warn('Erro ao buscar serviços no Supabase:', e);
       }
     }
 
-    return getLocalData<Service[]>('services_' + orgId, []);
+    return getLocalData<Service[]>('services_' + orgId, [
+      { id: 'srv-1', organization_id: orgId, name: 'Corte Degradê / Social', price: 40.00, duration: 30, active: true },
+      { id: 'srv-2', organization_id: orgId, name: 'Barba Completa com Toalha Quente', price: 35.00, duration: 30, active: true },
+      { id: 'srv-3', organization_id: orgId, name: 'Combo: Cabelo + Barba', price: 70.00, duration: 50, active: true },
+      { id: 'srv-4', organization_id: orgId, name: 'Pezinho / Acabamento', price: 20.00, duration: 15, active: true },
+    ]);
   },
 
-  async createService(service: Omit<Service, 'id'>): Promise<Service> {
+  async saveService(service: Omit<Service, 'id'> & { id?: string }): Promise<Service> {
+    const isEditing = Boolean(service.id);
+    const serviceId = service.id || 'srv-' + Date.now();
+    const finalService: Service = {
+      ...service,
+      id: serviceId,
+      created_at: new Date().toISOString(),
+    } as Service;
+
     if (isSupabaseConfigured()) {
       try {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(service.organization_id);
-        if (isUuid) {
+        const isUuidOrg = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(service.organization_id);
+        if (isUuidOrg) {
+          const payload: any = {
+            organization_id: service.organization_id,
+            name: service.name,
+            description: service.description,
+            price: Number(service.price) || 0,
+            duration: Number(service.duration) || 30,
+            active: service.active ?? true,
+          };
+
+          if (isEditing && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(serviceId)) {
+            payload.id = serviceId;
+          }
+
           const { data, error } = await supabase
             .from('services')
-            .insert([service])
+            .upsert([payload])
             .select()
             .single();
+
           if (data && !error) {
-            const list = getLocalData<Service[]>('services_' + service.organization_id, []);
-            setLocalData('services_' + service.organization_id, [...list, data]);
+            const list = await this.getServices(service.organization_id);
+            const filtered = list.filter(s => s.id !== data.id);
+            const updated = [data as Service, ...filtered];
+            setLocalData('services_' + service.organization_id, updated);
             return data as Service;
           }
         }
       } catch (e) {
-        console.error('Erro ao criar serviço no Supabase:', e);
+        console.error('Erro ao salvar serviço no Supabase:', e);
       }
     }
 
-    const newService: Service = {
-      ...service,
-      id: 'srv-' + Date.now(),
-      created_at: new Date().toISOString(),
-    };
-    const services = getLocalData<Service[]>('services_' + service.organization_id, []);
-    const updated = [...services, newService];
+    const list = await this.getServices(service.organization_id);
+    const filtered = list.filter(s => s.id !== serviceId);
+    const updated = [finalService, ...filtered];
     setLocalData('services_' + service.organization_id, updated);
-    return newService;
-  },
-
-  async updateService(id: string, updates: Partial<Service>, orgId: string): Promise<void> {
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('services').update(updates).eq('id', id);
-      } catch (e) {
-        console.error('Erro ao atualizar serviço:', e);
-      }
-    }
-
-    const services = getLocalData<Service[]>('services_' + orgId, []);
-    const updated = services.map(s => s.id === id ? { ...s, ...updates } : s);
-    setLocalData('services_' + orgId, updated);
+    return finalService;
   },
 
   async deleteService(id: string, orgId: string): Promise<void> {
@@ -394,16 +411,128 @@ export const DataService = {
       try {
         await supabase.from('services').delete().eq('id', id);
       } catch (e) {
-        console.error('Erro ao deletar serviço:', e);
+        console.error('Erro ao excluir serviço no Supabase:', e);
       }
     }
 
-    const services = getLocalData<Service[]>('services_' + orgId, []);
-    const updated = services.filter(s => s.id !== id);
+    const list = await this.getServices(orgId);
+    const updated = list.filter(s => s.id !== id);
     setLocalData('services_' + orgId, updated);
   },
 
-  // --- EQUIPE / PROFISSIONAIS ---
+  async createService(service: Omit<Service, 'id'>): Promise<Service> {
+    return this.saveService(service);
+  },
+
+  async updateService(id: string, updates: Partial<Service>, orgId: string): Promise<Service> {
+    const list = await this.getServices(orgId);
+    const existing = list.find(s => s.id === id);
+    const merged = { ...existing, ...updates, id, organization_id: orgId } as Service;
+    return this.saveService(merged);
+  },
+
+  // --- PRODUTOS E VITRINE DE ADICIONAIS ---
+  async getProducts(orgId: string): Promise<Product[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
+        if (isUuid) {
+          const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('organization_id', orgId)
+            .order('name', { ascending: true });
+
+          if (!error && Array.isArray(data) && data.length > 0) {
+            setLocalData('products_' + orgId, data);
+            return data as Product[];
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar produtos do Supabase:', e);
+      }
+    }
+
+    const fallback = DEFAULT_PRODUCTS_FACTORY(orgId);
+    return getLocalData<Product[]>('products_' + orgId, fallback);
+  },
+
+  async saveProduct(product: Omit<Product, 'id'> & { id?: string }): Promise<Product> {
+    const isEditing = Boolean(product.id);
+    const prodId = product.id || 'prod-' + Date.now();
+    const finalProduct: Product = {
+      ...product,
+      id: prodId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as Product;
+
+    if (isSupabaseConfigured()) {
+      try {
+        const isUuidOrg = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(product.organization_id);
+        if (isUuidOrg) {
+          const payload: any = {
+            organization_id: product.organization_id,
+            name: product.name,
+            description: product.description,
+            price: Number(product.price) || 0,
+            category: product.category || 'Geral',
+            image_url: product.image_url,
+            stock: product.stock ?? 50,
+            active: product.active ?? true,
+          };
+
+          if (isEditing && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prodId)) {
+            payload.id = prodId;
+          }
+
+          const { data, error } = await supabase
+            .from('products')
+            .upsert([payload])
+            .select()
+            .single();
+
+          if (data && !error) {
+            const list = await this.getProducts(product.organization_id);
+            const filtered = list.filter(p => p.id !== data.id);
+            const updated = [data as Product, ...filtered];
+            setLocalData('products_' + product.organization_id, updated);
+            return data as Product;
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao salvar produto no Supabase:', e);
+      }
+    }
+
+    const list = await this.getProducts(product.organization_id);
+    const filtered = list.filter(p => p.id !== prodId);
+    const updated = [finalProduct, ...filtered];
+    setLocalData('products_' + product.organization_id, updated);
+    return finalProduct;
+  },
+
+  async deleteProduct(id: string, orgId: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('products').delete().eq('id', id);
+      } catch (e) {
+        console.error('Erro ao excluir produto no Supabase:', e);
+      }
+    }
+
+    const list = await this.getProducts(orgId);
+    const updated = list.filter(p => p.id !== id);
+    setLocalData('products_' + orgId, updated);
+    return true;
+  },
+
+  async toggleProductsEnabled(orgId: string, enabled: boolean): Promise<boolean> {
+    await this.updateOrganization({ id: orgId, products_enabled: enabled });
+    return enabled;
+  },
+
+  // --- EQUIPE DE BARBEIROS ---
   async getTeam(orgId: string): Promise<UserProfile[]> {
     if (isSupabaseConfigured()) {
       try {
@@ -413,7 +542,7 @@ export const DataService = {
             .from('users')
             .select('*')
             .eq('organization_id', orgId)
-            .order('created_at', { ascending: true });
+            .order('role', { ascending: true });
 
           if (!error && Array.isArray(data) && data.length > 0) {
             setLocalData('team_' + orgId, data);
@@ -425,67 +554,108 @@ export const DataService = {
       }
     }
 
-    return getLocalData<UserProfile[]>('team_' + orgId, []);
+    return getLocalData<UserProfile[]>('team_' + orgId, [
+      {
+        id: 'barber-1',
+        organization_id: orgId,
+        full_name: 'Carlos Oliveira',
+        role: 'owner',
+        rating: 5.0,
+        phone: '(11) 98888-7777',
+        active: true,
+      },
+    ]);
   },
 
-  async createTeamMember(member: Omit<UserProfile, 'id'>): Promise<UserProfile> {
-    const newId = 'user-' + Date.now();
-    const newMember: UserProfile = {
-      ...member,
-      id: newId,
-      rating: 5.0,
-      active: true,
+  async saveBarber(barber: Partial<UserProfile> & { organization_id: string }): Promise<UserProfile> {
+    const isEditing = Boolean(barber.id);
+    const barberId = barber.id || 'barber-' + Date.now();
+    const finalBarber: UserProfile = {
+      id: barberId,
+      organization_id: barber.organization_id,
+      full_name: barber.full_name || 'Novo Barbeiro',
+      role: barber.role || 'barber',
+      phone: barber.phone,
+      avatar_url: barber.avatar_url,
+      rating: barber.rating || 5.0,
+      active: barber.active ?? true,
       created_at: new Date().toISOString(),
     };
 
     if (isSupabaseConfigured()) {
       try {
-        const { data, error } = await supabase
-          .from('users')
-          .insert([{ ...member, id: crypto.randomUUID?.() || newId }])
-          .select()
-          .single();
-        if (data && !error) return data as UserProfile;
+        const isUuidOrg = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(barber.organization_id);
+        if (isUuidOrg) {
+          const payload: any = {
+            organization_id: barber.organization_id,
+            full_name: barber.full_name,
+            role: barber.role || 'barber',
+            phone: barber.phone,
+            avatar_url: barber.avatar_url,
+            rating: barber.rating || 5.0,
+            active: barber.active ?? true,
+          };
+
+          if (isEditing && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(barberId)) {
+            payload.id = barberId;
+          }
+
+          const { data, error } = await supabase
+            .from('users')
+            .upsert([payload])
+            .select()
+            .single();
+
+          if (data && !error) {
+            const list = await this.getTeam(barber.organization_id);
+            const filtered = list.filter(b => b.id !== data.id);
+            const updated = [data as UserProfile, ...filtered];
+            setLocalData('team_' + barber.organization_id, updated);
+            return data as UserProfile;
+          }
+        }
       } catch (e) {
-        console.error('Erro ao cadastrar membro da equipe:', e);
+        console.error('Erro ao salvar barbeiro no Supabase:', e);
       }
     }
 
-    const team = getLocalData<UserProfile[]>('team_' + member.organization_id, []);
-    const updated = [...team, newMember];
-    setLocalData('team_' + member.organization_id, updated);
-    return newMember;
+    const list = await this.getTeam(barber.organization_id);
+    const filtered = list.filter(b => b.id !== barberId);
+    const updated = [finalBarber, ...filtered];
+    setLocalData('team_' + barber.organization_id, updated);
+    return finalBarber;
   },
 
-  async updateTeamMember(id: string, updates: Partial<UserProfile>, orgId: string): Promise<void> {
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('users').update(updates).eq('id', id);
-      } catch (e) {
-        console.error('Erro ao atualizar membro:', e);
-      }
-    }
-
-    const team = getLocalData<UserProfile[]>('team_' + orgId, []);
-    const updated = team.map(u => u.id === id ? { ...u, ...updates } : u);
-    setLocalData('team_' + orgId, updated);
-  },
-
-  async deleteTeamMember(id: string, orgId: string): Promise<void> {
+  async deleteBarber(id: string, orgId: string): Promise<void> {
     if (isSupabaseConfigured()) {
       try {
         await supabase.from('users').delete().eq('id', id);
       } catch (e) {
-        console.error('Erro ao remover membro:', e);
+        console.error('Erro ao excluir barbeiro no Supabase:', e);
       }
     }
 
-    const team = getLocalData<UserProfile[]>('team_' + orgId, []);
-    const updated = team.filter(u => u.id !== id);
+    const list = await this.getTeam(orgId);
+    const updated = list.filter(b => b.id !== id);
     setLocalData('team_' + orgId, updated);
   },
 
-  // --- HORÁRIOS / SCHEDULES ---
+  async createTeamMember(member: Partial<UserProfile> & { organization_id: string }): Promise<UserProfile> {
+    return this.saveBarber(member);
+  },
+
+  async updateTeamMember(id: string, updates: Partial<UserProfile>, orgId: string): Promise<UserProfile> {
+    const list = await this.getTeam(orgId);
+    const existing = list.find(b => b.id === id);
+    const merged = { ...existing, ...updates, id, organization_id: orgId };
+    return this.saveBarber(merged);
+  },
+
+  async deleteTeamMember(id: string, orgId: string): Promise<void> {
+    return this.deleteBarber(id, orgId);
+  },
+
+  // --- HORÁRIOS DE FUNCIONAMENTO ---
   async getSchedules(orgId: string): Promise<Schedule[]> {
     if (isSupabaseConfigured()) {
       try {
@@ -576,6 +746,8 @@ export const DataService = {
           status: appointment.status || 'confirmed',
           price: Number(appointment.price) || 0,
           is_subscription: Boolean(appointment.is_subscription),
+          products: appointment.products || null,
+          products_total: Number(appointment.products_total) || 0,
         };
 
         const isOrgUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.organization_id);
@@ -637,7 +809,9 @@ export const DataService = {
             .select('*, service:services(*), barber:users(*)')
             .single();
 
-          if (error && error.message?.includes('is_subscription')) {
+          if (error && (error.message?.includes('products') || error.message?.includes('is_subscription'))) {
+            delete payload.products;
+            delete payload.products_total;
             delete payload.is_subscription;
             const retry = await supabase
               .from('appointments')
@@ -717,65 +891,98 @@ export const DataService = {
             return data as MembershipPlan[];
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Erro ao carregar planos do Supabase:', e);
+      }
     }
 
     const fallback = DEFAULT_PLANS_FACTORY(orgId);
     return getLocalData<MembershipPlan[]>('plans_' + orgId, fallback);
   },
 
-  async createPlan(plan: Omit<MembershipPlan, 'id'>): Promise<MembershipPlan> {
-    const newPlan: MembershipPlan = {
+  async savePlan(plan: Omit<MembershipPlan, 'id'> & { id?: string }): Promise<MembershipPlan> {
+    const isEditing = Boolean(plan.id);
+    const planId = plan.id || 'plan-' + Date.now();
+    const finalPlan: MembershipPlan = {
       ...plan,
-      id: 'plan-' + Date.now(),
+      id: planId,
       created_at: new Date().toISOString(),
-    };
+    } as MembershipPlan;
 
     if (isSupabaseConfigured()) {
       try {
-        const { data, error } = await supabase
-          .from('membership_plans')
-          .insert([plan])
-          .select()
-          .single();
-        if (data && !error) {
-          const list = await this.getPlans(plan.organization_id);
-          setLocalData('plans_' + plan.organization_id, [...list, data]);
-          return data as MembershipPlan;
+        const isUuidOrg = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(plan.organization_id);
+        if (isUuidOrg) {
+          const payload: any = {
+            organization_id: plan.organization_id,
+            name: plan.name,
+            description: plan.description,
+            price: Number(plan.price) || 0,
+            cuts_per_month: Number(plan.cuts_per_month) || 2,
+            active: plan.active ?? true,
+          };
+
+          if (isEditing && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(planId)) {
+            payload.id = planId;
+          }
+
+          const { data, error } = await supabase
+            .from('membership_plans')
+            .upsert([payload])
+            .select()
+            .single();
+
+          if (data && !error) {
+            const list = await this.getPlans(plan.organization_id);
+            const filtered = list.filter(p => p.id !== data.id);
+            const updated = [data as MembershipPlan, ...filtered];
+            setLocalData('plans_' + plan.organization_id, updated);
+            return data as MembershipPlan;
+          }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Erro ao salvar plano no Supabase:', e);
+      }
     }
 
-    const list = getLocalData<MembershipPlan[]>('plans_' + plan.organization_id, DEFAULT_PLANS_FACTORY(plan.organization_id));
-    const updated = [...list, newPlan];
+    const list = await this.getPlans(plan.organization_id);
+    const filtered = list.filter(p => p.id !== planId);
+    const updated = [finalPlan, ...filtered];
     setLocalData('plans_' + plan.organization_id, updated);
-    return newPlan;
-  },
-
-  async updatePlan(id: string, updates: Partial<MembershipPlan>, orgId: string): Promise<void> {
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('membership_plans').update(updates).eq('id', id);
-      } catch (e) {}
-    }
-
-    const list = getLocalData<MembershipPlan[]>('plans_' + orgId, DEFAULT_PLANS_FACTORY(orgId));
-    const updated = list.map(p => p.id === id ? { ...p, ...updates } : p);
-    setLocalData('plans_' + orgId, updated);
+    return finalPlan;
   },
 
   async deletePlan(id: string, orgId: string): Promise<void> {
     if (isSupabaseConfigured()) {
       try {
         await supabase.from('membership_plans').delete().eq('id', id);
-      } catch (e) {}
+      } catch (e) {
+        console.error('Erro ao excluir plano no Supabase:', e);
+      }
     }
 
-    const list = getLocalData<MembershipPlan[]>('plans_' + orgId, DEFAULT_PLANS_FACTORY(orgId));
+    const list = await this.getPlans(orgId);
     const updated = list.filter(p => p.id !== id);
     setLocalData('plans_' + orgId, updated);
   },
 
+  async createPlan(plan: Omit<MembershipPlan, 'id'>): Promise<MembershipPlan> {
+    return this.savePlan(plan);
+  },
+
+  async updatePlan(id: string, updates: Partial<MembershipPlan>, orgId: string): Promise<MembershipPlan> {
+    const list = await this.getPlans(orgId);
+    const existing = list.find(p => p.id === id);
+    const merged = { ...existing, ...updates, id, organization_id: orgId } as MembershipPlan;
+    return this.savePlan(merged);
+  },
+
+  async togglePlansEnabled(orgId: string, enabled: boolean): Promise<boolean> {
+    await this.updateOrganization({ id: orgId, plans_enabled: enabled });
+    return enabled;
+  },
+
+  // --- CLIENTES ASSINANTES (VIP MEMBERS) ---
   async getSubscriptions(orgId: string): Promise<CustomerSubscription[]> {
     if (isSupabaseConfigured()) {
       try {
@@ -792,7 +999,9 @@ export const DataService = {
             return data as CustomerSubscription[];
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Erro ao buscar assinaturas do Supabase:', e);
+      }
     }
 
     return getLocalData<CustomerSubscription[]>('subscriptions_' + orgId, []);
@@ -807,17 +1016,34 @@ export const DataService = {
 
     if (isSupabaseConfigured()) {
       try {
-        const { data, error } = await supabase
-          .from('customer_subscriptions')
-          .insert([sub])
-          .select('*, plan:membership_plans(*)')
-          .single();
-        if (data && !error) {
-          const list = getLocalData<CustomerSubscription[]>('subscriptions_' + sub.organization_id, []);
-          setLocalData('subscriptions_' + sub.organization_id, [data, ...list]);
-          return data as CustomerSubscription;
+        const isUuidOrg = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sub.organization_id);
+        if (isUuidOrg) {
+          const payload: any = {
+            organization_id: sub.organization_id,
+            plan_id: sub.plan_id,
+            client_name: sub.client_name,
+            client_phone: sub.client_phone,
+            cuts_used: Number(sub.cuts_used) || 0,
+            cuts_total: Number(sub.cuts_total) || 2,
+            renewal_date: sub.renewal_date,
+            status: sub.status || 'active',
+          };
+
+          const { data, error } = await supabase
+            .from('customer_subscriptions')
+            .insert([payload])
+            .select('*, plan:membership_plans(*)')
+            .single();
+
+          if (data && !error) {
+            const list = getLocalData<CustomerSubscription[]>('subscriptions_' + sub.organization_id, []);
+            setLocalData('subscriptions_' + sub.organization_id, [data, ...list]);
+            return data as CustomerSubscription;
+          }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Erro ao registrar assinatura no Supabase:', e);
+      }
     }
 
     const list = getLocalData<CustomerSubscription[]>('subscriptions_' + sub.organization_id, []);
@@ -830,7 +1056,9 @@ export const DataService = {
     if (isSupabaseConfigured()) {
       try {
         await supabase.from('customer_subscriptions').update(updates).eq('id', id);
-      } catch (e) {}
+      } catch (e) {
+        console.error('Erro ao atualizar assinatura no Supabase:', e);
+      }
     }
 
     const list = getLocalData<CustomerSubscription[]>('subscriptions_' + orgId, []);
@@ -842,7 +1070,9 @@ export const DataService = {
     if (isSupabaseConfigured()) {
       try {
         await supabase.from('customer_subscriptions').delete().eq('id', id);
-      } catch (e) {}
+      } catch (e) {
+        console.error('Erro ao excluir assinatura no Supabase:', e);
+      }
     }
 
     const list = getLocalData<CustomerSubscription[]>('subscriptions_' + orgId, []);
@@ -936,7 +1166,6 @@ export const DataService = {
 
       if (available) {
         if (isSpecificBarber) {
-          // Barbeiro específico: verificar se esse barbeiro está ocupado
           for (const apt of appointments) {
             if (apt.status === 'cancelled') continue;
             if (apt.user_id !== barberId) continue;
@@ -952,7 +1181,6 @@ export const DataService = {
             }
           }
         } else {
-          // "Qualquer profissional": slot só fica indisponível se TODOS os barbeiros estiverem ocupados
           const busyBarbers = new Set<string>();
           for (const apt of appointments) {
             if (apt.status === 'cancelled') continue;
@@ -983,5 +1211,207 @@ export const DataService = {
     }
 
     return slots;
+  },
+
+  // --- AUTOMAÇÃO WHATSAPP (Z-API / EVOLUTION API) ---
+  async sendAutomatedWhatsAppMessage(params: {
+    org: Organization;
+    phone: string;
+    message: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { org, phone, message } = params;
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone) return { success: false, error: 'Telefone inválido' };
+
+    if (org.whatsapp_auto_enabled && org.whatsapp_api_instance && org.whatsapp_api_token) {
+      try {
+        const formattedPhone = cleanPhone.length === 10 || cleanPhone.length === 11 
+          ? `55${cleanPhone}` 
+          : cleanPhone;
+
+        const baseUrl = org.whatsapp_api_url || `https://api.z-api.io/instances/${org.whatsapp_api_instance}/token/${org.whatsapp_api_token}/send-text`;
+        
+        const response = await fetch(baseUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(org.whatsapp_api_token ? { 'Client-Token': org.whatsapp_api_token } : {})
+          },
+          body: JSON.stringify({
+            phone: formattedPhone,
+            message: message
+          })
+        });
+
+        if (response.ok) {
+          return { success: true };
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          return { success: false, error: errData?.message || 'Erro na resposta da API WhatsApp' };
+        }
+      } catch (e: any) {
+        console.warn('Erro ao disparar mensagem WhatsApp via API:', e);
+        return { success: false, error: e?.message || 'Falha de conexão com a API' };
+      }
+    }
+
+    return { success: false, error: 'Automação WhatsApp não configurada ou inativa.' };
+  },
+
+  // --- RELATÓRIOS E MÉTRICAS FINANCEIRAS ---
+  async getFinancialMetrics(orgId: string, period: 'today' | '7days' | 'month' | 'all'): Promise<FinancialMetrics> {
+    const allAppointments = await this.getAppointments(orgId);
+    const services = await this.getServices(orgId);
+    const team = await this.getTeam(orgId);
+
+    const now = new Date();
+    const todayStr = getLocalDateString(now);
+
+    // Filtrar pelo período
+    const filtered = allAppointments.filter(apt => {
+      const aptDateStr = getLocalDateString(apt.start_time);
+      if (period === 'today') {
+        return aptDateStr === todayStr;
+      }
+      if (period === '7days') {
+        const aptDate = new Date(apt.start_time);
+        const diffDays = (now.getTime() - aptDate.getTime()) / (1000 * 3600 * 24);
+        return diffDays >= 0 && diffDays <= 7;
+      }
+      if (period === 'month') {
+        const aptDate = new Date(apt.start_time);
+        return aptDate.getMonth() === now.getMonth() && aptDate.getFullYear() === now.getFullYear();
+      }
+      return true; // 'all'
+    });
+
+    const nonCancelled = filtered.filter(a => a.status !== 'cancelled');
+    const completed = filtered.filter(a => a.status === 'completed');
+    const cancelled = filtered.filter(a => a.status === 'cancelled');
+
+    // Cálculos de Receita
+    let totalRevenue = 0;
+    let servicesRevenue = 0;
+    let productsRevenue = 0;
+
+    const serviceCounts: Record<string, { count: number; revenue: number; name: string }> = {};
+    const productCounts: Record<string, { count: number; revenue: number; name: string }> = {};
+    const barberCounts: Record<string, { count: number; revenue: number; name: string; avatarUrl?: string }> = {};
+
+    nonCancelled.forEach(apt => {
+      const aptPrice = Number(apt.price) || 0;
+      const aptProductsTotal = Number(apt.products_total) || 0;
+      const servicePrice = Math.max(0, aptPrice - aptProductsTotal);
+
+      totalRevenue += aptPrice;
+      servicesRevenue += servicePrice;
+      productsRevenue += aptProductsTotal;
+
+      // Agregação de Serviços
+      const srvName = apt.service?.name || services.find(s => s.id === apt.service_id)?.name || 'Corte Barbearia';
+      if (!serviceCounts[srvName]) {
+        serviceCounts[srvName] = { count: 0, revenue: 0, name: srvName };
+      }
+      serviceCounts[srvName].count += 1;
+      serviceCounts[srvName].revenue += servicePrice;
+
+      // Agregação de Produtos
+      if (Array.isArray(apt.products)) {
+        apt.products.forEach(p => {
+          if (!productCounts[p.name]) {
+            productCounts[p.name] = { count: 0, revenue: 0, name: p.name };
+          }
+          productCounts[p.name].count += (p.quantity || 1);
+          productCounts[p.name].revenue += (p.price * (p.quantity || 1));
+        });
+      }
+
+      // Agregação de Barbeiro
+      const barber = team.find(t => t.id === apt.user_id) || apt.barber;
+      const bName = barber?.full_name || 'Barbeiro';
+      if (!barberCounts[apt.user_id || bName]) {
+        barberCounts[apt.user_id || bName] = { 
+          count: 0, 
+          revenue: 0, 
+          name: bName, 
+          avatarUrl: barber?.avatar_url 
+        };
+      }
+      barberCounts[apt.user_id || bName].count += 1;
+      barberCounts[apt.user_id || bName].revenue += aptPrice;
+    });
+
+    const averageTicket = nonCancelled.length > 0 ? (totalRevenue / nonCancelled.length) : 0;
+
+    // Top Serviços
+    const topServices = Object.values(serviceCounts)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5)
+      .map(s => ({
+        ...s,
+        percentage: totalRevenue > 0 ? Math.round((s.revenue / totalRevenue) * 100) : 0
+      }));
+
+    // Top Produtos
+    const topProducts = Object.values(productCounts)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5)
+      .map(p => ({
+        ...p,
+        percentage: productsRevenue > 0 ? Math.round((p.revenue / productsRevenue) * 100) : 0
+      }));
+
+    // Performance por Barbeiro
+    const barberPerformance = Object.entries(barberCounts)
+      .map(([barberId, val]) => ({
+        barberId,
+        barberName: val.name,
+        avatarUrl: val.avatarUrl,
+        cutsCount: val.count,
+        revenue: val.revenue,
+        percentage: totalRevenue > 0 ? Math.round((val.revenue / totalRevenue) * 100) : 0
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    // Faturamento Diário (Últimos 7 dias ou do mês)
+    const dailyMap: Record<string, { revenue: number; count: number; dateStr: string; label: string }> = {};
+    const daysBack = period === 'today' ? 1 : period === '7days' ? 7 : 14;
+
+    for (let i = daysBack - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const dStr = getLocalDateString(d);
+      const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+      dailyMap[dStr] = { revenue: 0, count: 0, dateStr: dStr, label };
+    }
+
+    nonCancelled.forEach(apt => {
+      const dStr = getLocalDateString(apt.start_time);
+      if (dailyMap[dStr]) {
+        dailyMap[dStr].revenue += Number(apt.price) || 0;
+        dailyMap[dStr].count += 1;
+      }
+    });
+
+    const dailyRevenue = Object.values(dailyMap).map(d => ({
+      date: d.dateStr,
+      dayLabel: d.label,
+      revenue: d.revenue,
+      appointmentsCount: d.count,
+    }));
+
+    return {
+      totalRevenue,
+      servicesRevenue,
+      productsRevenue,
+      totalAppointments: filtered.length,
+      completedAppointments: completed.length,
+      cancelledAppointments: cancelled.length,
+      averageTicket,
+      topServices,
+      topProducts,
+      barberPerformance,
+      dailyRevenue
+    };
   }
 };
