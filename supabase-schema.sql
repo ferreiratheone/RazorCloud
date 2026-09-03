@@ -10,6 +10,10 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 ALTER TABLE IF EXISTS public.users DROP CONSTRAINT IF EXISTS users_id_fkey;
 ALTER TABLE IF EXISTS public.users ALTER COLUMN id SET DEFAULT uuid_generate_v4();
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS has_break BOOLEAN DEFAULT true;
+ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS break_start TIME DEFAULT '12:00:00';
+ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS break_end TIME DEFAULT '13:00:00';
+ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS slot_interval INT DEFAULT 60;
 
 -- ==============================================================================
 -- 2. TABELAS PRINCIPAIS MULTI-TENANT
@@ -98,6 +102,10 @@ CREATE TABLE IF NOT EXISTS public.schedules (
   start_time TIME NOT NULL DEFAULT '09:00:00',
   end_time TIME NOT NULL DEFAULT '19:00:00',
   is_closed BOOLEAN NOT NULL DEFAULT false,
+  has_break BOOLEAN NOT NULL DEFAULT true,
+  break_start TIME DEFAULT '12:00:00',
+  break_end TIME DEFAULT '13:00:00',
+  slot_interval INT NOT NULL DEFAULT 60,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT unique_org_user_day UNIQUE (organization_id, user_id, day_of_week)
 );

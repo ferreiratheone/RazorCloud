@@ -74,8 +74,12 @@ export interface Schedule {
   user_id?: string | null; // specific barber or general shop schedule
   day_of_week: number; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
   start_time: string; // "09:00"
-  end_time: string; // "18:00"
+  end_time: string; // "19:00"
   is_closed: boolean;
+  has_break?: boolean;
+  break_start?: string; // "12:00"
+  break_end?: string; // "13:00"
+  slot_interval?: number; // 60
   created_at?: string;
 }
 

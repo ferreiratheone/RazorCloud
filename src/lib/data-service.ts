@@ -42,13 +42,13 @@ function setLocalData<T>(key: string, data: T): void {
 }
 
 export const DEFAULT_SCHEDULES_FACTORY = (orgId: string): Schedule[] => [
-  { id: 'sch-0-' + orgId, organization_id: orgId, day_of_week: 0, start_time: '09:00', end_time: '14:00', is_closed: true },
-  { id: 'sch-1-' + orgId, organization_id: orgId, day_of_week: 1, start_time: '09:00', end_time: '19:00', is_closed: false },
-  { id: 'sch-2-' + orgId, organization_id: orgId, day_of_week: 2, start_time: '09:00', end_time: '19:00', is_closed: false },
-  { id: 'sch-3-' + orgId, organization_id: orgId, day_of_week: 3, start_time: '09:00', end_time: '19:00', is_closed: false },
-  { id: 'sch-4-' + orgId, organization_id: orgId, day_of_week: 4, start_time: '09:00', end_time: '19:00', is_closed: false },
-  { id: 'sch-5-' + orgId, organization_id: orgId, day_of_week: 5, start_time: '09:00', end_time: '20:00', is_closed: false },
-  { id: 'sch-6-' + orgId, organization_id: orgId, day_of_week: 6, start_time: '08:30', end_time: '18:00', is_closed: false },
+  { id: 'sch-0-' + orgId, organization_id: orgId, day_of_week: 0, start_time: '09:00', end_time: '14:00', is_closed: true, has_break: false, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-1-' + orgId, organization_id: orgId, day_of_week: 1, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-2-' + orgId, organization_id: orgId, day_of_week: 2, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-3-' + orgId, organization_id: orgId, day_of_week: 3, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-4-' + orgId, organization_id: orgId, day_of_week: 4, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-5-' + orgId, organization_id: orgId, day_of_week: 5, start_time: '09:00', end_time: '20:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-6-' + orgId, organization_id: orgId, day_of_week: 6, start_time: '08:30', end_time: '18:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
 ];
 
 export const DEFAULT_PLANS_FACTORY = (orgId: string): MembershipPlan[] => [
@@ -1198,7 +1198,8 @@ export const DataService = {
     const { orgId, barberId, serviceDuration, targetDate } = params;
     const dayOfWeek = targetDate.getDay();
 
-    const schedules = await this.getSchedules(orgId);
+    const isSpecificBarber = barberId && barberId !== 'any';
+    const schedules = await this.getSchedules(orgId, isSpecificBarber ? barberId : null);
     const daySchedule = schedules.find(s => s.day_of_week === dayOfWeek);
 
     if (!daySchedule || daySchedule.is_closed) {
@@ -1213,10 +1214,9 @@ export const DataService = {
     const team = await this.getTeam(orgId);
     const totalBarberCount = Math.max(1, team.filter(t => t.active !== false).length);
 
-    const isSpecificBarber = barberId && barberId !== 'any';
-
     const slots: TimeSlot[] = [];
-    const intervalMinutes = 30;
+    // Intervalo de agendamentos: de 1 em 1 hora (60 minutos)
+    const intervalMinutes = daySchedule.slot_interval || 60;
 
     let currentMinutes = startHour * 60 + startMin;
     const endMinutes = endHour * 60 + endMin;
@@ -1225,7 +1225,25 @@ export const DataService = {
     const isToday = getLocalDateString(targetDate) === getLocalDateString(now);
     const currentMinutesNow = now.getHours() * 60 + now.getMinutes();
 
-    while (currentMinutes + serviceDuration <= endMinutes) {
+    // Configuração de Horário de Almoço / Pausa
+    let breakStartMinutes = -1;
+    let breakEndMinutes = -1;
+    if (daySchedule.has_break && daySchedule.break_start && daySchedule.break_end) {
+      const [bStartH, bStartM] = daySchedule.break_start.split(':').map(Number);
+      const [bEndH, bEndM] = daySchedule.break_end.split(':').map(Number);
+      breakStartMinutes = bStartH * 60 + bStartM;
+      breakEndMinutes = bEndH * 60 + bEndM;
+    }
+
+    while (currentMinutes + Math.min(serviceDuration, intervalMinutes) <= endMinutes) {
+      // Se o horário cair dentro da pausa/almoço do profissional, pular este horário
+      if (breakStartMinutes !== -1 && breakEndMinutes !== -1) {
+        if (currentMinutes >= breakStartMinutes && currentMinutes < breakEndMinutes) {
+          currentMinutes += intervalMinutes;
+          continue;
+        }
+      }
+
       const slotHour = Math.floor(currentMinutes / 60);
       const slotMinute = currentMinutes % 60;
       const timeString = `${String(slotHour).padStart(2, '0')}:${String(slotMinute).padStart(2, '0')}`;

@@ -6,7 +6,9 @@ import {
   Loader2,
   AlertCircle,
   User,
-  Building2
+  Building2,
+  Coffee,
+  Sparkles
 } from 'lucide-react';
 import { DataService } from '@/src/lib/data-service';
 import type { Organization, Schedule, UserProfile } from '@/src/types/database';
@@ -54,12 +56,18 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
       try {
         const list = await DataService.getSchedules(organization.id, selectedUserId);
         
-        // Garantir que todos os 7 dias existam
+        // Garantir que todos os 7 dias existam com intervalo padrão de 1 em 1 hora
         const fullWeek: Schedule[] = [];
         for (let day = 0; day <= 6; day++) {
           const existing = list.find(s => s.day_of_week === day);
           if (existing) {
-            fullWeek.push(existing);
+            fullWeek.push({
+              ...existing,
+              has_break: existing.has_break ?? true,
+              break_start: existing.break_start || '12:00',
+              break_end: existing.break_end || '13:00',
+              slot_interval: existing.slot_interval || 60,
+            });
           } else {
             fullWeek.push({
               id: `sch-${day}-${selectedUserId || 'general'}`,
@@ -69,6 +77,10 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
               start_time: '09:00',
               end_time: '19:00',
               is_closed: day === 0, // Domingo fechado por padrão
+              has_break: true,
+              break_start: '12:00',
+              break_end: '13:00',
+              slot_interval: 60, // 1 em 1 hora
             });
           }
         }
@@ -92,13 +104,28 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
     setSavedSuccess(false);
   }
 
-  function handleTimeChange(dayOfWeek: number, field: 'start_time' | 'end_time', value: string) {
+  function handleToggleBreak(dayOfWeek: number) {
+    setSchedules(prev => prev.map(s => {
+      if (s.day_of_week === dayOfWeek) {
+        return { ...s, has_break: !s.has_break };
+      }
+      return s;
+    }));
+    setSavedSuccess(false);
+  }
+
+  function handleFieldChange(dayOfWeek: number, field: keyof Schedule, value: any) {
     setSchedules(prev => prev.map(s => {
       if (s.day_of_week === dayOfWeek) {
         return { ...s, [field]: value };
       }
       return s;
     }));
+    setSavedSuccess(false);
+  }
+
+  function handleGlobalIntervalChange(interval: number) {
+    setSchedules(prev => prev.map(s => ({ ...s, slot_interval: interval })));
     setSavedSuccess(false);
   }
 
@@ -116,6 +143,7 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
   }
 
   const activeBarber = team.find(t => t.id === selectedUserId);
+  const currentInterval = schedules[1]?.slot_interval || 60;
 
   return (
     <div className="space-y-6 max-w-full overflow-hidden">
@@ -131,10 +159,7 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
             }
           </h2>
           <p className="text-xs text-zinc-400 mt-0.5">
-            {isOwner 
-              ? 'Configure a jornada geral do estabelecimento ou personalize a escala de cada profissional.'
-              : 'Defina os dias da semana e horários em que você está disponível para atender clientes.'
-            }
+            Configure a jornada diária, intervalos de almoço e agendamentos de 1 em 1 hora.
           </p>
         </div>
 
@@ -153,43 +178,80 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
         </button>
       </div>
 
-      {/* Seletor de Escala (Visível apenas para Donos/Administradores) */}
-      {isOwner && (
-        <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+      {/* Seletor de Escala & Intervalo de Agendamentos */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Seletor de Barbeiro (para o Dono) */}
+        {isOwner && (
+          <div className="lg:col-span-2 bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-sm">
             <span className="text-xs font-bold text-zinc-300">Configurar Horários de:</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 overflow-x-auto max-w-full scrollbar-none">
-            <button
-              onClick={() => setSelectedUserId(null)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 ${
-                selectedUserId === null 
-                  ? 'bg-white text-zinc-950 font-bold shadow-sm' 
-                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Building2 className="w-3.5 h-3.5" /> Geral da Barbearia
-            </button>
-
-            {team.map((barber) => (
+            <div className="flex items-center gap-1.5 overflow-x-auto max-w-full scrollbar-none">
               <button
-                key={barber.id}
-                onClick={() => setSelectedUserId(barber.id)}
+                onClick={() => setSelectedUserId(null)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 ${
-                  selectedUserId === barber.id 
-                    ? 'bg-emerald-500 text-zinc-950 font-bold shadow-sm' 
+                  selectedUserId === null 
+                    ? 'bg-white text-zinc-950 font-bold shadow-sm' 
                     : 'bg-zinc-800 text-zinc-400 hover:text-white'
                 }`}
               >
-                <User className="w-3.5 h-3.5" /> {barber.full_name}
+                <Building2 className="w-3.5 h-3.5" /> Geral da Barbearia
               </button>
-            ))}
+
+              {team.map((barber) => (
+                <button
+                  key={barber.id}
+                  onClick={() => setSelectedUserId(barber.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 ${
+                    selectedUserId === barber.id 
+                      ? 'bg-emerald-500 text-zinc-950 font-bold shadow-sm' 
+                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <User className="w-3.5 h-3.5" /> {barber.full_name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Seletor de Intervalo entre Agendamentos */}
+        <div className={`bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-between gap-2.5 shadow-sm ${!isOwner ? 'lg:col-span-3' : ''}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Grade de Agendamento:
+            </span>
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-500/20">
+              {currentInterval === 60 ? 'De 1 em 1 hora' : `A cada ${currentInterval} min`}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleGlobalIntervalChange(60)}
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all text-center ${
+                currentInterval === 60 
+                  ? 'bg-white text-zinc-950 shadow-md' 
+                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
+              }`}
+            >
+              1 em 1 Hora (Recomendado)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleGlobalIntervalChange(30)}
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all text-center ${
+                currentInterval === 30 
+                  ? 'bg-white text-zinc-950 shadow-md' 
+                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
+              }`}
+            >
+              A cada 30 min
+            </button>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Grade de 7 Dias */}
+      {/* Grade de 7 Dias com Suporte a Pausa / Almoço */}
       {loading ? (
         <div className="p-16 text-center text-zinc-500 flex flex-col items-center justify-center bg-zinc-900/40 rounded-2xl border border-zinc-800">
           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-zinc-400" />
@@ -202,12 +264,12 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
             return (
               <div 
                 key={schedule.day_of_week}
-                className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors
+                className={`p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition-colors
                   ${schedule.is_closed ? 'bg-zinc-950/40 opacity-60' : 'bg-transparent'}
                 `}
               >
                 {/* Switch do Dia Aberto / Folga */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   <input 
                     type="checkbox"
                     id={`day-${schedule.day_of_week}`}
@@ -217,7 +279,7 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
                   />
                   <label 
                     htmlFor={`day-${schedule.day_of_week}`}
-                    className="text-xs sm:text-sm font-semibold text-white cursor-pointer"
+                    className="text-xs sm:text-sm font-semibold text-white cursor-pointer min-w-[110px]"
                   >
                     {dayName}
                   </label>
@@ -228,31 +290,74 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
                   )}
                 </div>
 
-                {/* Seletor de Horário Início e Fim */}
+                {/* Controles de Horário de Atendimento e Horário de Almoço */}
                 {!schedule.is_closed ? (
-                  <div className="flex items-center gap-2 self-end sm:self-auto">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-zinc-500">Das</span>
-                      <input 
-                        type="time" 
-                        value={schedule.start_time.substring(0, 5)}
-                        onChange={(e) => handleTimeChange(schedule.day_of_week, 'start_time', e.target.value)}
-                        className="bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-zinc-700"
-                      />
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+                    {/* Horário de Funcionamento */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-400 font-medium">Atendimento:</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-zinc-500">Das</span>
+                        <input 
+                          type="time" 
+                          value={schedule.start_time.substring(0, 5)}
+                          onChange={(e) => handleFieldChange(schedule.day_of_week, 'start_time', e.target.value)}
+                          className="bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-zinc-700 font-mono"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-zinc-500">às</span>
+                        <input 
+                          type="time" 
+                          value={schedule.end_time.substring(0, 5)}
+                          onChange={(e) => handleFieldChange(schedule.day_of_week, 'end_time', e.target.value)}
+                          className="bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-zinc-700 font-mono"
+                        />
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-zinc-500">às</span>
-                      <input 
-                        type="time" 
-                        value={schedule.end_time.substring(0, 5)}
-                        onChange={(e) => handleTimeChange(schedule.day_of_week, 'end_time', e.target.value)}
-                        className="bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-zinc-700"
-                      />
+                    {/* Horário de Almoço / Pausa */}
+                    <div className="flex items-center gap-2.5 bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-2 sm:p-1.5">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="checkbox"
+                          id={`break-${schedule.day_of_week}`}
+                          checked={Boolean(schedule.has_break)}
+                          onChange={() => handleToggleBreak(schedule.day_of_week)}
+                          className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-0 cursor-pointer"
+                        />
+                        <label 
+                          htmlFor={`break-${schedule.day_of_week}`}
+                          className="text-xs font-semibold text-amber-400 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Coffee className="w-3.5 h-3.5" /> Pausa / Almoço
+                        </label>
+                      </div>
+
+                      {schedule.has_break ? (
+                        <div className="flex items-center gap-1.5">
+                          <input 
+                            type="time" 
+                            value={(schedule.break_start || '12:00').substring(0, 5)}
+                            onChange={(e) => handleFieldChange(schedule.day_of_week, 'break_start', e.target.value)}
+                            className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-none font-mono"
+                          />
+                          <span className="text-zinc-500 text-xs">às</span>
+                          <input 
+                            type="time" 
+                            value={(schedule.break_end || '13:00').substring(0, 5)}
+                            onChange={(e) => handleFieldChange(schedule.day_of_week, 'break_end', e.target.value)}
+                            className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-none font-mono"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-zinc-500 italic">Sem intervalo</span>
+                      )}
                     </div>
                   </div>
                 ) : (
-                  <span className="text-xs text-zinc-500 italic self-end sm:self-auto">
+                  <span className="text-xs text-zinc-500 italic">
                     Nenhum atendimento neste dia
                   </span>
                 )}
