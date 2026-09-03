@@ -7,7 +7,7 @@ import {
   AlertCircle,
   User,
   Building2,
-  Coffee,
+  PauseCircle,
   Sparkles
 } from 'lucide-react';
 import { DataService } from '@/src/lib/data-service';
@@ -159,7 +159,7 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
             }
           </h2>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Configure a jornada diária, intervalos de almoço e agendamentos de 1 em 1 hora.
+            Configure a jornada diária, inclua paradas/bloqueios de horário e agendamentos de 1 em 1 hora.
           </p>
         </div>
 
@@ -317,7 +317,7 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
                       </div>
                     </div>
 
-                    {/* Horário de Almoço / Pausa */}
+                    {/* Incluir Parada / Bloqueio de Horário */}
                     <div className="flex items-center gap-2.5 bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-2 sm:p-1.5">
                       <div className="flex items-center gap-2">
                         <input 
@@ -331,7 +331,7 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
                           htmlFor={`break-${schedule.day_of_week}`}
                           className="text-xs font-semibold text-amber-400 flex items-center gap-1 cursor-pointer"
                         >
-                          <Coffee className="w-3.5 h-3.5" /> Pausa / Almoço
+                          <PauseCircle className="w-3.5 h-3.5 text-amber-400" /> Incluir Parada
                         </label>
                       </div>
 
@@ -352,7 +352,7 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
                           />
                         </div>
                       ) : (
-                        <span className="text-[11px] text-zinc-500 italic">Sem intervalo</span>
+                        <span className="text-[11px] text-zinc-500 italic">Sem paradas</span>
                       )}
                     </div>
                   </div>
