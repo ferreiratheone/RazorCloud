@@ -909,9 +909,18 @@ export const DataService = {
             if (users && users.length > 0) {
               payload.user_id = users[0].id;
             } else {
-              const { data: anyUser } = await supabase.from('users').select('id').limit(1);
-              if (anyUser && anyUser.length > 0) {
-                payload.user_id = anyUser[0].id;
+              const { data: newUser } = await supabase
+                .from('users')
+                .insert([{
+                  organization_id: payload.organization_id,
+                  full_name: 'Profissional da Barbearia',
+                  role: 'owner',
+                  active: true
+                }])
+                .select('id')
+                .single();
+              if (newUser) {
+                payload.user_id = newUser.id;
               }
             }
           }
