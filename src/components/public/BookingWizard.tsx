@@ -19,7 +19,8 @@ import {
   ShoppingBag,
   Plus,
   Minus,
-  Check
+  Check,
+  Users
 } from 'lucide-react';
 import { DataService, getLocalDateString } from '@/src/lib/data-service';
 import type { Organization, Service, UserProfile, TimeSlot, CustomerSubscription, Product } from '@/src/types/database';
@@ -629,6 +630,40 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   // --- ETAPA 3: DATA E HORÁRIO ---
   const renderStep3 = () => (
     <div className="space-y-4 w-full">
+      {/* Banner do Profissional Selecionado com Opção de Trocar */}
+      {selectedProfessional && !isSingleBarber && (
+        <div className="flex items-center justify-between bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3 shadow-sm">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {selectedProfessional.avatar_url ? (
+              <img 
+                src={selectedProfessional.avatar_url} 
+                alt={selectedProfessional.full_name} 
+                className="w-8 h-8 rounded-xl object-cover border border-zinc-700 aspect-square shrink-0" 
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-300 shrink-0">
+                {selectedProfessional.full_name.substring(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Barbeiro Selecionado</p>
+              <p className="text-xs font-bold text-white truncate">{selectedProfessional.full_name}</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setDirection(-1);
+              setStep(2);
+            }}
+            className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl transition-colors shrink-0"
+          >
+            Trocar Barbeiro
+          </button>
+        </div>
+      )}
+
       {/* Seletor Horizontal de Dias */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full scrollbar-none">
         {dateOptions.map((opt, idx) => (
@@ -660,10 +695,30 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
             <Loader2 className="w-5 h-5 animate-spin text-zinc-400 mb-2" />
             <p className="text-xs">Buscando horários livres...</p>
           </div>
-        ) : availableSlots.length === 0 ? (
-          <div className="py-8 text-center border border-dashed border-zinc-800 rounded-xl p-4">
-            <p className="text-xs text-zinc-400">Nenhum horário disponível para esta data.</p>
-            <p className="text-[10px] text-zinc-500 mt-1">Por favor, escolha outro dia acima.</p>
+        ) : availableSlots.length === 0 || availableSlots.filter(s => s.available).length === 0 ? (
+          <div className="py-8 text-center border border-dashed border-zinc-800 rounded-2xl p-5 bg-zinc-950/40 space-y-3">
+            <Clock className="w-7 h-7 text-zinc-600 mx-auto" />
+            <div>
+              <p className="text-xs font-bold text-zinc-200">
+                Sem horários livres {selectedProfessional ? `com ${selectedProfessional.full_name}` : ''} nesta data.
+              </p>
+              <p className="text-[10px] text-zinc-500 mt-1 max-w-xs mx-auto">
+                Você pode selecionar outro dia acima ou verificar a disponibilidade de outros barbeiros da equipe.
+              </p>
+            </div>
+
+            {!isSingleBarber && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDirection(-1);
+                  setStep(2);
+                }}
+                className="bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors inline-flex items-center gap-1.5 border border-zinc-700 shadow-sm"
+              >
+                <Users className="w-3.5 h-3.5 text-emerald-400" /> Ver Outros Barbeiros
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1">
