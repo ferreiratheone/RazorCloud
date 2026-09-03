@@ -71,12 +71,36 @@ export const DataService = {
           const fullName = meta.full_name || 'Proprietário';
           const baseSlug = userSavedOrg?.slug || (shopName.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'barbearia') + '-' + authUserId.substring(0, 4);
 
-          // 1. Buscar perfil do usuário no Supabase
-          const { data: userProfile } = await supabase
+          // 1. Buscar perfil do usuário no Supabase (por id direto ou e-mail cadastrado pelo dono)
+          let userProfile: any = null;
+          const { data: profileById } = await supabase
             .from('users')
             .select('*')
             .eq('id', authUserId)
             .maybeSingle();
+
+          if (profileById) {
+            userProfile = profileById;
+          } else if (userEmail) {
+            const { data: profileByEmail } = await supabase
+              .from('users')
+              .select('*')
+              .eq('email', userEmail)
+              .maybeSingle();
+
+            if (profileByEmail) {
+              userProfile = profileByEmail;
+              try {
+                await supabase
+                  .from('users')
+                  .update({ auth_user_id: authUserId })
+                  .eq('id', profileByEmail.id);
+                userProfile.auth_user_id = authUserId;
+              } catch (linkErr) {
+                console.warn('Vínculo auth_user_id:', linkErr);
+              }
+            }
+          }
 
           if (userProfile && userProfile.organization_id) {
             const { data: orgData } = await supabase
