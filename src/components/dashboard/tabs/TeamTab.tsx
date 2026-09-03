@@ -129,15 +129,16 @@ export function TeamTab({ organization }: TeamTabProps) {
     setIsSaving(true);
     try {
       if (editingMember) {
-        await DataService.updateTeamMember(editingMember.id, {
+        const updated = await DataService.updateTeamMember(editingMember.id, {
           full_name: fullName.trim(),
           email: email.trim() || undefined,
           phone: phone.trim() || undefined,
           role,
           avatar_url: avatarUrl.trim() || undefined,
         }, organization.id);
+        setTeam(prev => prev.map(m => m.id === editingMember.id ? updated : m));
       } else {
-        await DataService.createTeamMember({
+        const created = await DataService.createTeamMember({
           organization_id: organization.id,
           full_name: fullName.trim(),
           email: email.trim() || undefined,
@@ -146,11 +147,12 @@ export function TeamTab({ organization }: TeamTabProps) {
           avatar_url: avatarUrl.trim() || undefined,
           active: true,
         });
+        setTeam(prev => [created, ...prev.filter(m => m.id !== created.id)]);
       }
       setIsModalOpen(false);
-      await loadTeam();
     } catch (e) {
-      console.error(e);
+      console.error('Erro ao salvar profissional:', e);
+      alert('Não foi possível salvar o profissional. Tente novamente.');
     } finally {
       setIsSaving(false);
     }
@@ -158,8 +160,8 @@ export function TeamTab({ organization }: TeamTabProps) {
 
   async function handleDelete(id: string) {
     if (!confirm('Deseja realmente remover este membro da equipe?')) return;
+    setTeam(prev => prev.filter(m => m.id !== id));
     await DataService.deleteTeamMember(id, organization.id);
-    await loadTeam();
   }
 
   return (

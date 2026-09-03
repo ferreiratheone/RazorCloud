@@ -6,6 +6,11 @@
 -- 1. Habilitar extensões necessárias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Ajustes de compatibilidade em tabelas existentes
+ALTER TABLE IF EXISTS public.users DROP CONSTRAINT IF EXISTS users_id_fkey;
+ALTER TABLE IF EXISTS public.users ALTER COLUMN id SET DEFAULT uuid_generate_v4();
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+
 -- ==============================================================================
 -- 2. TABELAS PRINCIPAIS MULTI-TENANT
 -- ==============================================================================
@@ -35,11 +40,12 @@ CREATE INDEX IF NOT EXISTS idx_organizations_slug ON public.organizations (slug)
 
 -- B. TABELA USERS (Donos, Administradores e Barbeiros)
 CREATE TABLE IF NOT EXISTS public.users (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
   email TEXT,
   full_name TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'owner' CHECK (role IN ('owner', 'admin', 'barber')),
+  role TEXT NOT NULL DEFAULT 'barber' CHECK (role IN ('owner', 'admin', 'barber')),
   avatar_url TEXT,
   phone TEXT,
   rating NUMERIC(2,1) DEFAULT 5.0,

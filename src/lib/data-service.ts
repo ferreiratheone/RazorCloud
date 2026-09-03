@@ -596,11 +596,18 @@ export const DataService = {
 
   async saveBarber(barber: Partial<UserProfile> & { organization_id: string }): Promise<UserProfile> {
     const isEditing = Boolean(barber.id);
-    const barberId = barber.id || 'barber-' + Date.now();
+    const validUuid = barber.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(barber.id);
+    const barberId = validUuid 
+      ? barber.id! 
+      : (typeof crypto !== 'undefined' && crypto.randomUUID 
+          ? crypto.randomUUID() 
+          : 'barber-' + Date.now());
+
     const finalBarber: UserProfile = {
       id: barberId,
       organization_id: barber.organization_id,
       full_name: barber.full_name || 'Novo Barbeiro',
+      email: barber.email,
       role: barber.role || 'barber',
       phone: barber.phone,
       avatar_url: barber.avatar_url,
@@ -615,15 +622,16 @@ export const DataService = {
         if (isUuidOrg) {
           const payload: any = {
             organization_id: barber.organization_id,
-            full_name: barber.full_name,
+            full_name: barber.full_name || 'Novo Barbeiro',
+            email: barber.email || null,
             role: barber.role || 'barber',
-            phone: barber.phone,
-            avatar_url: barber.avatar_url,
-            rating: barber.rating || 5.0,
+            phone: barber.phone || null,
+            avatar_url: barber.avatar_url || null,
+            rating: Number(barber.rating) || 5.0,
             active: barber.active ?? true,
           };
 
-          if (isEditing && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(barberId)) {
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(barberId)) {
             payload.id = barberId;
           }
 
@@ -634,11 +642,13 @@ export const DataService = {
             .single();
 
           if (data && !error) {
-            const list = await this.getTeam(barber.organization_id);
-            const filtered = list.filter(b => b.id !== data.id);
+            const list = getLocalData<UserProfile[]>('team_' + barber.organization_id, []);
+            const filtered = list.filter(b => b.id !== data.id && b.id !== barber.id);
             const updated = [data as UserProfile, ...filtered];
             setLocalData('team_' + barber.organization_id, updated);
             return data as UserProfile;
+          } else if (error) {
+            console.error('Erro detalhado ao gravar barbeiro no Supabase:', error);
           }
         }
       } catch (e) {
@@ -646,8 +656,8 @@ export const DataService = {
       }
     }
 
-    const list = await this.getTeam(barber.organization_id);
-    const filtered = list.filter(b => b.id !== barberId);
+    const list = getLocalData<UserProfile[]>('team_' + barber.organization_id, []);
+    const filtered = list.filter(b => b.id !== barberId && b.id !== barber.id);
     const updated = [finalBarber, ...filtered];
     setLocalData('team_' + barber.organization_id, updated);
     return finalBarber;
