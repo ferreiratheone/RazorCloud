@@ -801,28 +801,29 @@ export const DataService = {
             return clean;
           });
 
-          // Se todos os 7 dias já têm ID no banco, atualiza por ID primário (100% infalível em PostgreSQL)
-          const allHaveIds = payload.every(p => Boolean(p.id));
-          if (allHaveIds) {
+          // Se os 7 dias já existiam no banco com seus IDs reais, atualiza por id
+          const allExistInDb = idMap.size === 7;
+          if (allExistInDb) {
             const { error: upsertErr } = await supabase.from('schedules').upsert(payload, { onConflict: 'id' });
-            if (upsertErr) {
-              console.error('Erro ao atualizar horários no Supabase por id:', upsertErr);
+            if (!upsertErr) {
+              return;
             }
+            console.warn('Upsert por id falhou, tentando reinserção limpa:', upsertErr);
+          }
+
+          // Se ainda não existiam no banco ou se o upsert falhou: limpa e faz insert limpo
+          if (userId) {
+            await supabase.from('schedules').delete().eq('organization_id', orgId).eq('user_id', userId);
           } else {
-            // Se não têm id primário ainda, limpa e insere
-            if (userId) {
-              await supabase.from('schedules').delete().eq('organization_id', orgId).eq('user_id', userId);
-            } else {
-              await supabase.from('schedules').delete().eq('organization_id', orgId).is('user_id', null);
-            }
-            const cleanInserts = payload.map(p => {
-              const { id, ...rest } = p;
-              return rest;
-            });
-            const { error: insertErr } = await supabase.from('schedules').insert(cleanInserts);
-            if (insertErr) {
-              console.error('Erro ao inserir horários no Supabase:', insertErr);
-            }
+            await supabase.from('schedules').delete().eq('organization_id', orgId).is('user_id', null);
+          }
+          const cleanInserts = payload.map(p => {
+            const { id, ...rest } = p;
+            return rest;
+          });
+          const { error: insertErr } = await supabase.from('schedules').insert(cleanInserts);
+          if (insertErr) {
+            console.error('Erro ao inserir horários no Supabase:', insertErr);
           }
         }
       } catch (e) {
