@@ -682,20 +682,28 @@ export const DataService = {
     return this.deleteBarber(id, orgId);
   },
 
-  // --- HORÁRIOS DE FUNCIONAMENTO ---
-  async getSchedules(orgId: string): Promise<Schedule[]> {
+  // --- HORÁRIOS DE FUNCIONAMENTO & ESCALAS INDIVIDUAIS ---
+  async getSchedules(orgId: string, userId?: string | null): Promise<Schedule[]> {
     if (isSupabaseConfigured()) {
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
         if (isUuid) {
-          const { data, error } = await supabase
+          let query = supabase
             .from('schedules')
             .select('*')
-            .eq('organization_id', orgId)
-            .order('day_of_week', { ascending: true });
+            .eq('organization_id', orgId);
+
+          if (userId) {
+            query = query.eq('user_id', userId);
+          } else {
+            query = query.is('user_id', null);
+          }
+
+          const { data, error } = await query.order('day_of_week', { ascending: true });
 
           if (!error && Array.isArray(data) && data.length > 0) {
-            setLocalData('schedules_' + orgId, data);
+            const cacheKey = `schedules_${orgId}_${userId || 'general'}`;
+            setLocalData(cacheKey, data);
             return data as Schedule[];
           }
         }
@@ -704,36 +712,53 @@ export const DataService = {
       }
     }
 
-    const fallback = DEFAULT_SCHEDULES_FACTORY(orgId);
-    return getLocalData<Schedule[]>('schedules_' + orgId, fallback);
+    const cacheKey = `schedules_${orgId}_${userId || 'general'}`;
+    const fallback = DEFAULT_SCHEDULES_FACTORY(orgId).map(s => ({
+      ...s,
+      user_id: userId || null,
+      id: `sch-${s.day_of_week}-${orgId}-${userId || 'general'}`
+    }));
+    return getLocalData<Schedule[]>(cacheKey, fallback);
   },
 
-  async saveSchedules(orgId: string, schedules: Schedule[]): Promise<void> {
+  async saveSchedules(orgId: string, schedules: Schedule[], userId?: string | null): Promise<void> {
+    const formatted = schedules.map(s => ({
+      ...s,
+      organization_id: orgId,
+      user_id: userId || null,
+    }));
+
     if (isSupabaseConfigured()) {
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
         if (isUuid) {
-          await supabase.from('schedules').upsert(schedules);
+          await supabase.from('schedules').upsert(formatted);
         }
       } catch (e) {
         console.error('Erro ao salvar horários:', e);
       }
     }
 
-    setLocalData('schedules_' + orgId, schedules);
+    const cacheKey = `schedules_${orgId}_${userId || 'general'}`;
+    setLocalData(cacheKey, formatted);
   },
 
   // --- AGENDAMENTOS (APPOINTMENTS) ---
-  async getAppointments(orgId: string, dateStr?: string): Promise<Appointment[]> {
+  async getAppointments(orgId: string, dateStr?: string, barberId?: string): Promise<Appointment[]> {
     if (isSupabaseConfigured()) {
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
         if (isUuid) {
-          const { data, error } = await supabase
+          let query = supabase
             .from('appointments')
             .select('*, service:services(*), barber:users(*)')
-            .eq('organization_id', orgId)
-            .order('start_time', { ascending: true });
+            .eq('organization_id', orgId);
+
+          if (barberId && barberId !== 'all') {
+            query = query.eq('user_id', barberId);
+          }
+
+          const { data, error } = await query.order('start_time', { ascending: true });
 
           if (!error && Array.isArray(data)) {
             setLocalData('appointments_' + orgId, data);
@@ -746,7 +771,10 @@ export const DataService = {
       }
     }
 
-    const list = getLocalData<Appointment[]>('appointments_' + orgId, []);
+    let list = getLocalData<Appointment[]>('appointments_' + orgId, []);
+    if (barberId && barberId !== 'all') {
+      list = list.filter(a => a.user_id === barberId);
+    }
     if (!dateStr) return list;
 
     return list.filter(a => getLocalDateString(a.start_time) === dateStr);

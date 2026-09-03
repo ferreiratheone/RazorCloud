@@ -23,11 +23,15 @@ import type { Appointment, Organization, Service, UserProfile, Schedule } from '
 
 interface AgendaTabProps {
   organization: Organization;
+  currentUser: UserProfile;
   onNavigateTab: (tab: 'services' | 'team' | 'hours' | 'settings') => void;
   onViewPublicPage: (slug: string) => void;
 }
 
-export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: AgendaTabProps) {
+export function AgendaTab({ organization, currentUser, onNavigateTab, onViewPublicPage }: AgendaTabProps) {
+  const isOwner = currentUser.role === 'owner' || currentUser.role === 'admin';
+  const [selectedBarberFilter, setSelectedBarberFilter] = useState<string>(isOwner ? 'all' : currentUser.id);
+
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [team, setTeam] = useState<UserProfile[]>([]);
@@ -44,14 +48,14 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
   const [newClientName, setNewClientName] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
   const [newServiceId, setNewServiceId] = useState('');
-  const [newBarberId, setNewBarberId] = useState('');
+  const [newBarberId, setNewBarberId] = useState(isOwner ? '' : currentUser.id);
   const [newTime, setNewTime] = useState('14:00');
   const [isCreating, setIsCreating] = useState(false);
 
   async function loadData() {
     try {
       const [apts, srvs, teamList, schedList] = await Promise.all([
-        DataService.getAppointments(organization.id, selectedDate),
+        DataService.getAppointments(organization.id, selectedDate, isOwner ? undefined : currentUser.id),
         DataService.getServices(organization.id),
         DataService.getTeam(organization.id),
         DataService.getSchedules(organization.id),
@@ -128,15 +132,36 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
     setSelectedDate(getLocalDateString(curr));
   }
 
-  // Filtragem de agendamentos por status (Agendados, Concluídos, Cancelados)
+  // Filtragem de agendamentos por status e por barbeiro
   const filteredAppointments = useMemo(() => {
-    return appointments.filter(a => a.status === statusFilter);
-  }, [appointments, statusFilter]);
+    return appointments
+      .filter(a => a.status === statusFilter)
+      .filter(a => {
+        if (!isOwner) return a.user_id === currentUser.id;
+        if (selectedBarberFilter === 'all') return true;
+        return a.user_id === selectedBarberFilter;
+      });
+  }, [appointments, statusFilter, selectedBarberFilter, isOwner, currentUser.id]);
 
-  // Métricas do dia
-  const activeAppointments = appointments.filter(a => a.status !== 'cancelled');
+  // Métricas do dia (adaptadas ao filtro do barbeiro)
+  const activeAppointments = useMemo(() => {
+    return appointments
+      .filter(a => a.status !== 'cancelled')
+      .filter(a => {
+        if (!isOwner) return a.user_id === currentUser.id;
+        if (selectedBarberFilter === 'all') return true;
+        return a.user_id === selectedBarberFilter;
+      });
+  }, [appointments, selectedBarberFilter, isOwner, currentUser.id]);
+
   const totalRevenue = activeAppointments.reduce((acc, a) => acc + (Number(a.price) || 0), 0);
-  const totalCompleted = appointments.filter(a => a.status === 'completed').length;
+  const totalCompleted = appointments
+    .filter(a => a.status === 'completed')
+    .filter(a => {
+      if (!isOwner) return a.user_id === currentUser.id;
+      if (selectedBarberFilter === 'all') return true;
+      return a.user_id === selectedBarberFilter;
+    }).length;
 
   async function handleStatusChange(id: string, newStatus: Appointment['status']) {
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
@@ -216,7 +241,21 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
           <p className="text-xs text-zinc-400">Controle horários marcados e faturamento em tempo real.</p>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+          {/* Seletor de Barbeiro para o Dono */}
+          {isOwner && team.length > 0 && (
+            <select
+              value={selectedBarberFilter}
+              onChange={(e) => setSelectedBarberFilter(e.target.value)}
+              className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-700"
+            >
+              <option value="all">Todos os Barbeiros</option>
+              {team.map(t => (
+                <option key={t.id} value={t.id}>{t.full_name}</option>
+              ))}
+            </select>
+          )}
+
           {/* Seletor de Data Calendário Nativo */}
           <div className="relative flex-1 sm:flex-initial">
             <CalendarIcon className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none" />

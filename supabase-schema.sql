@@ -1,13 +1,13 @@
 -- ==============================================================================
--- SCHEMA DDL DEFINITIVO & BLINDADO (DEVSECOPS): RazorCloud Multi-Tenant SaaS
--- Execute este script no SQL Editor do seu projeto Supabase
+-- SCHEMA DDL DEFINITIVO, COMPLETO & BLINDADO (DEVSECOPS): RazorCloud SaaS
+-- Execute este script completo no SQL Editor do seu projeto Supabase
 -- ==============================================================================
 
 -- 1. Habilitar extensões necessárias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ==============================================================================
--- 2. TABELAS PRINCIPAIS
+-- 2. TABELAS PRINCIPAIS MULTI-TENANT
 -- ==============================================================================
 
 -- A. TABELA ORGANIZATIONS (Barbearias / Estabelecimentos)
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS public.organizations (
 
 CREATE INDEX IF NOT EXISTS idx_organizations_slug ON public.organizations (slug);
 
--- B. TABELA USERS (Donos e Profissionais)
+-- B. TABELA USERS (Donos, Administradores e Barbeiros)
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS public.users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_org ON public.users (organization_id);
+CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (organization_id, role);
 
 -- C. TABELA SERVICES (Catálogo de Serviços)
 CREATE TABLE IF NOT EXISTS public.services (
@@ -65,7 +66,7 @@ CREATE TABLE IF NOT EXISTS public.services (
 
 CREATE INDEX IF NOT EXISTS idx_services_org ON public.services (organization_id);
 
--- D. TABELA PRODUCTS (Vitrine de Produtos & Adicionais da Barbearia)
+-- D. TABELA PRODUCTS (Vitrine de Produtos & Estoque da Barbearia)
 CREATE TABLE IF NOT EXISTS public.products (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -82,12 +83,12 @@ CREATE TABLE IF NOT EXISTS public.products (
 
 CREATE INDEX IF NOT EXISTS idx_products_org ON public.products (organization_id);
 
--- E. TABELA SCHEDULES (Horários de Funcionamento)
+-- E. TABELA SCHEDULES (Horários Gerais do Salão e Escalas Individuais por Barbeiro)
 CREATE TABLE IF NOT EXISTS public.schedules (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-  day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE, -- NULL para horário geral do salão, ou UUID do barbeiro
+  day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0 = Domingo, 1 = Segunda, ... 6 = Sábado
   start_time TIME NOT NULL DEFAULT '09:00:00',
   end_time TIME NOT NULL DEFAULT '19:00:00',
   is_closed BOOLEAN NOT NULL DEFAULT false,
@@ -95,7 +96,7 @@ CREATE TABLE IF NOT EXISTS public.schedules (
   CONSTRAINT unique_org_user_day UNIQUE (organization_id, user_id, day_of_week)
 );
 
-CREATE INDEX IF NOT EXISTS idx_schedules_org ON public.schedules (organization_id);
+CREATE INDEX IF NOT EXISTS idx_schedules_org_user ON public.schedules (organization_id, user_id, day_of_week);
 
 -- F. TABELA APPOINTMENTS (Agendamentos)
 CREATE TABLE IF NOT EXISTS public.appointments (
@@ -120,6 +121,7 @@ CREATE TABLE IF NOT EXISTS public.appointments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_appointments_org_date ON public.appointments (organization_id, start_time);
+CREATE INDEX IF NOT EXISTS idx_appointments_barber ON public.appointments (user_id, start_time);
 
 -- G. TABELA MEMBERSHIP_PLANS (Planos Mensais / Clube VIP)
 CREATE TABLE IF NOT EXISTS public.membership_plans (
@@ -152,7 +154,7 @@ CREATE TABLE IF NOT EXISTS public.customer_subscriptions (
 CREATE INDEX IF NOT EXISTS idx_subscriptions_org_phone ON public.customer_subscriptions (organization_id, client_phone);
 
 -- ==============================================================================
--- 3. HABILITAR ROW LEVEL SECURITY (RLS)
+-- 3. HABILITAR ROW LEVEL SECURITY (RLS) EM TODAS AS TABELAS
 -- ==============================================================================
 
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
@@ -165,9 +167,10 @@ ALTER TABLE public.membership_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- ==============================================================================
--- 4. FUNÇÃO AUXILIAR DE SEGURANÇA (ISOLAMENTO MULTI-TENANT SEGURO)
+-- 4. FUNÇÕES AUXILIARES DE SEGURANÇA (ISOLAMENTO MULTI-TENANT E PERFIS)
 -- ==============================================================================
 
+-- Retorna a organização do usuário logado
 CREATE OR REPLACE FUNCTION public.get_auth_org_id()
 RETURNS UUID
 LANGUAGE sql
@@ -178,11 +181,22 @@ AS $$
   SELECT organization_id FROM public.users WHERE id = auth.uid() LIMIT 1;
 $$;
 
+-- Retorna o cargo (role) do usuário logado ('owner', 'admin', 'barber')
+CREATE OR REPLACE FUNCTION public.get_auth_user_role()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT role FROM public.users WHERE id = auth.uid() LIMIT 1;
+$$;
+
 -- ==============================================================================
 -- 5. POLÍTICAS DE SEGURANÇA BLINDADAS (RLS)
 -- ==============================================================================
 
--- A. Limpeza de políticas antigas
+-- A. Limpeza de políticas existentes
 DROP POLICY IF EXISTS "Public Read Organizations" ON public.organizations;
 DROP POLICY IF EXISTS "Public Read Services" ON public.services;
 DROP POLICY IF EXISTS "Public Read Products" ON public.products;
@@ -196,24 +210,16 @@ DROP POLICY IF EXISTS "Public Read Active Plans" ON public.membership_plans;
 DROP POLICY IF EXISTS "Public Read Subscriptions" ON public.customer_subscriptions;
 DROP POLICY IF EXISTS "Public Read Subscriptions Verification" ON public.customer_subscriptions;
 
-DROP POLICY IF EXISTS "Authenticated Manage Org" ON public.organizations;
 DROP POLICY IF EXISTS "Tenant Manage Own Organization" ON public.organizations;
-DROP POLICY IF EXISTS "Authenticated Manage Users" ON public.users;
 DROP POLICY IF EXISTS "Tenant Manage Own Team" ON public.users;
-DROP POLICY IF EXISTS "Authenticated Manage Services" ON public.services;
 DROP POLICY IF EXISTS "Tenant Manage Own Services" ON public.services;
-DROP POLICY IF EXISTS "Authenticated Manage Products" ON public.products;
 DROP POLICY IF EXISTS "Tenant Manage Own Products" ON public.products;
-DROP POLICY IF EXISTS "Authenticated Manage Schedules" ON public.schedules;
 DROP POLICY IF EXISTS "Tenant Manage Own Schedules" ON public.schedules;
-DROP POLICY IF EXISTS "Authenticated Manage Appointments" ON public.appointments;
 DROP POLICY IF EXISTS "Tenant Manage Own Appointments" ON public.appointments;
-DROP POLICY IF EXISTS "Authenticated Manage Plans" ON public.membership_plans;
 DROP POLICY IF EXISTS "Tenant Manage Own Plans" ON public.membership_plans;
-DROP POLICY IF EXISTS "Authenticated Manage Subscriptions" ON public.customer_subscriptions;
 DROP POLICY IF EXISTS "Tenant Manage Own Subscriptions" ON public.customer_subscriptions;
 
--- B. Políticas Públicas (Vitrine do Cliente - Leitura Restrita e Criação)
+-- B. Políticas Públicas (Vitrine de Agendamento do Cliente - Acesso Anônimo Seguro)
 CREATE POLICY "Public Read Organizations" ON public.organizations
   FOR SELECT TO anon, authenticated USING (true);
 
@@ -238,7 +244,7 @@ CREATE POLICY "Public Create Appointment" ON public.appointments
 CREATE POLICY "Public Read Subscriptions Verification" ON public.customer_subscriptions
   FOR SELECT TO anon, authenticated USING (status = 'active');
 
--- C. Políticas do Dono (Authenticated - Isolamento Estrito de Tenant)
+-- C. Políticas do Dono / Administrador (Acesso Completo ao Estabelecimento)
 CREATE POLICY "Tenant Manage Own Organization" ON public.organizations
   FOR ALL TO authenticated
   USING (id = public.get_auth_org_id())
@@ -246,7 +252,7 @@ CREATE POLICY "Tenant Manage Own Organization" ON public.organizations
 
 CREATE POLICY "Tenant Manage Own Team" ON public.users
   FOR ALL TO authenticated
-  USING (id = auth.uid() OR organization_id = public.get_auth_org_id())
+  USING (organization_id = public.get_auth_org_id())
   WITH CHECK (organization_id = public.get_auth_org_id());
 
 CREATE POLICY "Tenant Manage Own Services" ON public.services
@@ -280,7 +286,29 @@ CREATE POLICY "Tenant Manage Own Subscriptions" ON public.customer_subscriptions
   WITH CHECK (organization_id = public.get_auth_org_id());
 
 -- ==============================================================================
--- 6. TRIGGER AUTOMÁTICO: ONBOARDING DE NOVO DONO
+-- 6. FUNÇÃO PARA DECREMENTAR ESTOQUE DE PRODUTOS VIA BANCO
+-- ==============================================================================
+
+CREATE OR REPLACE FUNCTION public.decrement_product_stock(
+  p_product_id UUID,
+  p_quantity INT,
+  p_org_id UUID
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.products
+  SET stock = GREATEST(0, stock - p_quantity),
+      updated_at = NOW()
+  WHERE id = p_product_id AND organization_id = p_org_id;
+END;
+$$;
+
+-- ==============================================================================
+-- 7. TRIGGER AUTOMÁTICO: ONBOARDING DE NOVO PROPRIETÁRIO
 -- ==============================================================================
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -291,7 +319,25 @@ DECLARE
   base_slug TEXT;
   final_slug TEXT;
   counter INT := 1;
+  user_role TEXT;
 BEGIN
+  user_role := COALESCE(NEW.raw_user_meta_data->>'role', 'owner');
+  
+  -- Se o usuário for convidado como barbeiro de uma organização existente
+  IF NEW.raw_user_meta_data->>'organization_id' IS NOT NULL THEN
+    INSERT INTO public.users (id, organization_id, email, full_name, role, phone)
+    VALUES (
+      NEW.id,
+      (NEW.raw_user_meta_data->>'organization_id')::UUID,
+      NEW.email,
+      COALESCE(NEW.raw_user_meta_data->>'full_name', 'Barbeiro Profissional'),
+      'barber',
+      NEW.raw_user_meta_data->>'phone'
+    );
+    RETURN NEW;
+  END IF;
+
+  -- Fluxo de Novo Dono da Barbearia
   shop_name := COALESCE(NEW.raw_user_meta_data->>'barber_shop_name', 'Minha Barbearia');
   base_slug := LOWER(REGEXP_REPLACE(shop_name, '[^a-zA-Z0-9]+', '-', 'g'));
   base_slug := TRIM(BOTH '-' FROM base_slug);
@@ -316,6 +362,7 @@ BEGIN
     'owner'
   );
 
+  -- Horários Padrão da Barbearia (Geral - user_id NULL)
   INSERT INTO public.schedules (organization_id, user_id, day_of_week, start_time, end_time, is_closed)
   VALUES
     (new_org_id, NULL, 0, '09:00:00', '14:00:00', true),
@@ -326,16 +373,25 @@ BEGIN
     (new_org_id, NULL, 5, '09:00:00', '20:00:00', false),
     (new_org_id, NULL, 6, '08:30:00', '18:00:00', false);
 
-  INSERT INTO public.membership_plans (organization_id, name, description, price, cuts_per_month)
+  -- Serviços Iniciais Padrão
+  INSERT INTO public.services (organization_id, name, description, price, duration)
   VALUES
-    (new_org_id, 'Plano Silver (Quinzenal)', '2 cortes de cabelo por mês', 70.00, 2),
-    (new_org_id, 'Plano Gold (Semanal VIP)', '4 cortes de cabelo por mês', 120.00, 4);
+    (new_org_id, 'Corte Degradê / Social', 'Corte moderno na tesoura e máquina com lavagem.', 40.00, 30),
+    (new_org_id, 'Barba Completa com Toalha Quente', 'Barboterapia relaxante com óleo e navalha descartável.', 35.00, 30),
+    (new_org_id, 'Combo: Cabelo + Barba', 'Serviço completo de cabelo e barba alinhados.', 70.00, 50);
 
+  -- Produtos Iniciais da Vitrine
   INSERT INTO public.products (organization_id, name, description, price, category, stock)
   VALUES
     (new_org_id, 'Pomada Modeladora Efeito Matte 100g', 'Fixação forte e acabamento natural sem brilho.', 35.00, 'Pomadas & Ceras', 50),
     (new_org_id, 'Óleo Hidratante para Barba 30ml', 'Fragrância amadeirada com óleo de argan.', 40.00, 'Barba & Cuidado', 30),
     (new_org_id, 'Cerveja Artesanal IPA 355ml', 'Cerveja gelada servida durante o atendimento.', 12.00, 'Bebidas', 100);
+
+  -- Planos VIP Iniciais
+  INSERT INTO public.membership_plans (organization_id, name, description, price, cuts_per_month)
+  VALUES
+    (new_org_id, 'Plano Silver (Quinzenal)', '2 cortes de cabelo por mês', 70.00, 2),
+    (new_org_id, 'Plano Gold (Semanal VIP)', '4 cortes de cabelo por mês', 120.00, 4);
 
   RETURN NEW;
 END;

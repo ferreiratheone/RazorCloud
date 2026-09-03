@@ -58,16 +58,23 @@ export default function RazorCloudAdminShell({
   const [activeTab, setActiveTab] = useState<DashboardTab>('agenda');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navigation = [
+  const isOwner = currentUser.role === 'owner' || currentUser.role === 'admin';
+
+  const navigation = isOwner ? [
     { id: 'agenda' as const, label: 'Agenda do Dia', icon: CalendarDays },
     { id: 'financial' as const, label: 'Relatório Financeiro', icon: TrendingUp },
     { id: 'services' as const, label: 'Serviços e Preços', icon: Scissors },
     { id: 'products' as const, label: 'Produtos & Vitrine', icon: ShoppingBag },
     { id: 'clients' as const, label: 'Base de Clientes', icon: Contact2 },
     { id: 'plans' as const, label: 'Clube de Assinaturas', icon: Crown },
-    { id: 'hours' as const, label: 'Horários da Barbearia', icon: Clock },
+    { id: 'hours' as const, label: 'Horários & Escalas', icon: Clock },
     { id: 'team' as const, label: 'Equipe de Barbeiros', icon: Users },
     { id: 'settings' as const, label: 'Configurações do Site', icon: Settings },
+  ] : [
+    { id: 'agenda' as const, label: 'Minha Agenda', icon: CalendarDays },
+    { id: 'hours' as const, label: 'Meus Horários de Trabalho', icon: Clock },
+    { id: 'services' as const, label: 'Serviços da Barbearia', icon: Scissors },
+    { id: 'products' as const, label: 'Produtos & Vitrine', icon: ShoppingBag },
   ];
 
   function handleOpenPublicPage(slug: string) {
@@ -83,39 +90,39 @@ export default function RazorCloudAdminShell({
       case 'agenda':
         return (
           <AgendaTab 
-            organization={organization} 
+            organization={organization}
+            currentUser={currentUser}
             onNavigateTab={(tab) => setActiveTab(tab)}
             onViewPublicPage={handleOpenPublicPage}
           />
         );
       case 'financial':
-        return <FinancialTab organization={organization} />;
+        return isOwner ? <FinancialTab organization={organization} /> : null;
       case 'services':
         return <ServicesTab organization={organization} />;
       case 'products':
         return <ProductsTab organization={organization} onUpdateOrg={onUpdateOrg} />;
       case 'clients':
-        return <ClientsTab organization={organization} />;
+        return isOwner ? <ClientsTab organization={organization} /> : null;
       case 'plans':
-        return <PlansTab organization={organization} onUpdateOrg={onUpdateOrg} />;
-      case 'whatsapp':
-        return <WhatsAppTab organization={organization} onUpdateOrg={onUpdateOrg} />;
+        return isOwner ? <PlansTab organization={organization} onUpdateOrg={onUpdateOrg} /> : null;
       case 'team':
-        return <TeamTab organization={organization} />;
+        return isOwner ? <TeamTab organization={organization} /> : null;
       case 'hours':
-        return <HoursTab organization={organization} />;
+        return <HoursTab organization={organization} currentUser={currentUser} />;
       case 'settings':
-        return (
+        return isOwner ? (
           <SettingsTab 
             organization={organization} 
             onUpdateOrg={onUpdateOrg} 
             onViewPublicPage={handleOpenPublicPage} 
           />
-        );
+        ) : null;
       default:
         return (
           <AgendaTab 
-            organization={organization} 
+            organization={organization}
+            currentUser={currentUser}
             onNavigateTab={(tab) => setActiveTab(tab)}
             onViewPublicPage={handleOpenPublicPage}
           />
