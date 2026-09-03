@@ -393,26 +393,6 @@ BEGIN
     (new_org_id, NULL, 5, '09:00:00', '20:00:00', false, false, '12:00:00', '13:00:00', 60),
     (new_org_id, NULL, 6, '08:30:00', '18:00:00', false, false, '12:00:00', '13:00:00', 60);
 
-  -- Serviços Iniciais Padrão
-  INSERT INTO public.services (organization_id, name, description, price, duration)
-  VALUES
-    (new_org_id, 'Corte Degradê / Social', 'Corte moderno na tesoura e máquina com lavagem.', 40.00, 30),
-    (new_org_id, 'Barba Completa com Toalha Quente', 'Barboterapia relaxante com óleo e navalha descartável.', 35.00, 30),
-    (new_org_id, 'Combo: Cabelo + Barba', 'Serviço completo de cabelo e barba alinhados.', 70.00, 50);
-
-  -- Produtos Iniciais da Vitrine
-  INSERT INTO public.products (organization_id, name, description, price, category, stock)
-  VALUES
-    (new_org_id, 'Pomada Modeladora Efeito Matte 100g', 'Fixação forte e acabamento natural sem brilho.', 35.00, 'Pomadas & Ceras', 50),
-    (new_org_id, 'Óleo Hidratante para Barba 30ml', 'Fragrância amadeirada com óleo de argan.', 40.00, 'Barba & Cuidado', 30),
-    (new_org_id, 'Cerveja Artesanal IPA 355ml', 'Cerveja gelada servida durante o atendimento.', 12.00, 'Bebidas', 100);
-
-  -- Planos VIP Iniciais
-  INSERT INTO public.membership_plans (organization_id, name, description, price, cuts_per_month)
-  VALUES
-    (new_org_id, 'Plano Silver (Quinzenal)', '2 cortes de cabelo por mês', 70.00, 2),
-    (new_org_id, 'Plano Gold (Semanal VIP)', '4 cortes de cabelo por mês', 120.00, 4);
-
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

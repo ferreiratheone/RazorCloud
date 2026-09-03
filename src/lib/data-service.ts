@@ -43,77 +43,17 @@ function setLocalData<T>(key: string, data: T): void {
 
 export const DEFAULT_SCHEDULES_FACTORY = (orgId: string): Schedule[] => [
   { id: 'sch-0-' + orgId, organization_id: orgId, day_of_week: 0, start_time: '09:00', end_time: '14:00', is_closed: true, has_break: false, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
-  { id: 'sch-1-' + orgId, organization_id: orgId, day_of_week: 1, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
-  { id: 'sch-2-' + orgId, organization_id: orgId, day_of_week: 2, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
-  { id: 'sch-3-' + orgId, organization_id: orgId, day_of_week: 3, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
-  { id: 'sch-4-' + orgId, organization_id: orgId, day_of_week: 4, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
-  { id: 'sch-5-' + orgId, organization_id: orgId, day_of_week: 5, start_time: '09:00', end_time: '20:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
-  { id: 'sch-6-' + orgId, organization_id: orgId, day_of_week: 6, start_time: '08:30', end_time: '18:00', is_closed: false, has_break: true, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-1-' + orgId, organization_id: orgId, day_of_week: 1, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: false, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-2-' + orgId, organization_id: orgId, day_of_week: 2, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: false, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-3-' + orgId, organization_id: orgId, day_of_week: 3, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: false, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-4-' + orgId, organization_id: orgId, day_of_week: 4, start_time: '09:00', end_time: '19:00', is_closed: false, has_break: false, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-5-' + orgId, organization_id: orgId, day_of_week: 5, start_time: '09:00', end_time: '20:00', is_closed: false, has_break: false, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
+  { id: 'sch-6-' + orgId, organization_id: orgId, day_of_week: 6, start_time: '08:30', end_time: '18:00', is_closed: false, has_break: false, break_start: '12:00', break_end: '13:00', slot_interval: 60 },
 ];
 
-export const DEFAULT_PLANS_FACTORY = (orgId: string): MembershipPlan[] => [
-  {
-    id: 'plan-1-' + orgId,
-    organization_id: orgId,
-    name: 'Plano Silver (Quinzenal)',
-    description: 'Ideal para quem corta o cabelo a cada 15 dias.',
-    price: 70.00,
-    cuts_per_month: 2,
-    active: true,
-  },
-  {
-    id: 'plan-2-' + orgId,
-    organization_id: orgId,
-    name: 'Plano Gold (Semanal VIP)',
-    description: 'Corte toda semana para manter o visual sempre alinhado.',
-    price: 120.00,
-    cuts_per_month: 4,
-    active: true,
-  },
-];
+export const DEFAULT_PLANS_FACTORY = (_orgId: string): MembershipPlan[] => [];
 
-export const DEFAULT_PRODUCTS_FACTORY = (orgId: string): Product[] => [
-  {
-    id: 'prod-1-' + orgId,
-    organization_id: orgId,
-    name: 'Pomada Modeladora Efeito Matte 100g',
-    description: 'Fixação forte e acabamento natural sem brilho.',
-    price: 35.00,
-    category: 'Pomadas & Ceras',
-    stock: 50,
-    active: true,
-  },
-  {
-    id: 'prod-2-' + orgId,
-    organization_id: orgId,
-    name: 'Óleo Hidratante para Barba 30ml',
-    description: 'Fragrância amadeirada com óleo de argan e macadâmia.',
-    price: 40.00,
-    category: 'Barba & Cuidado',
-    stock: 30,
-    active: true,
-  },
-  {
-    id: 'prod-3-' + orgId,
-    organization_id: orgId,
-    name: 'Cerveja Artesanal IPA 355ml',
-    description: 'Cerveja artesanal gelada para degustar no salão.',
-    price: 12.00,
-    category: 'Bebidas',
-    stock: 100,
-    active: true,
-  },
-  {
-    id: 'prod-4-' + orgId,
-    organization_id: orgId,
-    name: 'Pente de Madeira Antiestático',
-    description: 'Alinha os fios e barba sem eletricidade estática.',
-    price: 20.00,
-    category: 'Acessórios',
-    stock: 25,
-    active: true,
-  },
-];
+export const DEFAULT_PRODUCTS_FACTORY = (_orgId: string): Product[] => [];
 
 export const DataService = {
   // --- AUTENTICAÇÃO E SESSÃO MULTI-DISPOSITIVOS ---
@@ -346,12 +286,7 @@ export const DataService = {
       }
     }
 
-    return getLocalData<Service[]>('services_' + orgId, [
-      { id: 'srv-1', organization_id: orgId, name: 'Corte Degradê / Social', price: 40.00, duration: 30, active: true },
-      { id: 'srv-2', organization_id: orgId, name: 'Barba Completa com Toalha Quente', price: 35.00, duration: 30, active: true },
-      { id: 'srv-3', organization_id: orgId, name: 'Combo: Cabelo + Barba', price: 70.00, duration: 50, active: true },
-      { id: 'srv-4', organization_id: orgId, name: 'Pezinho / Acabamento', price: 20.00, duration: 15, active: true },
-    ]);
+    return getLocalData<Service[]>('services_' + orgId, []);
   },
 
   async saveService(service: Omit<Service, 'id'> & { id?: string }): Promise<Service> {
@@ -593,17 +528,7 @@ export const DataService = {
       return localList;
     }
 
-    return [
-      {
-        id: 'barber-1',
-        organization_id: orgId,
-        full_name: 'Carlos Oliveira',
-        role: 'owner',
-        rating: 5.0,
-        phone: '(11) 98888-7777',
-        active: true,
-      },
-    ];
+    return [];
   },
 
   async saveBarber(barber: Partial<UserProfile> & { organization_id: string }): Promise<UserProfile> {
@@ -782,7 +707,26 @@ export const DataService = {
       try {
         const isUuidOrg = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
         if (isUuidOrg) {
+          // 1. Buscar os IDs existentes no banco para cada dia da semana
+          let query = supabase
+            .from('schedules')
+            .select('id, day_of_week')
+            .eq('organization_id', orgId);
+
+          if (userId) {
+            query = query.eq('user_id', userId);
+          } else {
+            query = query.is('user_id', null);
+          }
+
+          const { data: existingRows } = await query;
+          const idMap = new Map<number, string>();
+          if (Array.isArray(existingRows)) {
+            existingRows.forEach((r: any) => idMap.set(r.day_of_week, r.id));
+          }
+
           const payload = formatted.map(s => {
+            const existingId = idMap.get(s.day_of_week);
             const clean: any = {
               organization_id: s.organization_id,
               user_id: s.user_id,
@@ -795,18 +739,36 @@ export const DataService = {
               break_end: s.break_end,
               slot_interval: s.slot_interval,
             };
-            if (s.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id)) {
+            if (existingId) {
+              clean.id = existingId;
+            } else if (s.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id)) {
               clean.id = s.id;
             }
             return clean;
           });
 
-          const { error } = await supabase
-            .from('schedules')
-            .upsert(payload, { onConflict: 'organization_id,user_id,day_of_week' });
-
-          if (error) {
-            console.error('Erro detalhado ao salvar horários no Supabase:', error);
+          // Se todos os 7 dias já têm ID no banco, atualiza por ID primário (100% infalível em PostgreSQL)
+          const allHaveIds = payload.every(p => Boolean(p.id));
+          if (allHaveIds) {
+            const { error: upsertErr } = await supabase.from('schedules').upsert(payload, { onConflict: 'id' });
+            if (upsertErr) {
+              console.error('Erro ao atualizar horários no Supabase por id:', upsertErr);
+            }
+          } else {
+            // Se não têm id primário ainda, limpa e insere
+            if (userId) {
+              await supabase.from('schedules').delete().eq('organization_id', orgId).eq('user_id', userId);
+            } else {
+              await supabase.from('schedules').delete().eq('organization_id', orgId).is('user_id', null);
+            }
+            const cleanInserts = payload.map(p => {
+              const { id, ...rest } = p;
+              return rest;
+            });
+            const { error: insertErr } = await supabase.from('schedules').insert(cleanInserts);
+            if (insertErr) {
+              console.error('Erro ao inserir horários no Supabase:', insertErr);
+            }
           }
         }
       } catch (e) {
