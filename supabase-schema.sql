@@ -1,22 +1,16 @@
 -- ==============================================================================
--- SCHEMA DDL DEFINITIVO, COMPLETO & BLINDADO (DEVSECOPS): RazorCloud SaaS
--- Execute este script completo no SQL Editor do seu projeto Supabase
+-- SCRIPT SQL ÚNICO, DEFINITIVO & COMPLETO: RazorCloud SaaS Multi-Tenant
+-- Como usar:
+-- 1. Abra o painel do seu Supabase (https://supabase.com/dashboard)
+-- 2. No menu lateral, clique em "SQL Editor"
+-- 3. Crie uma nova query (ou limpe a tela), cole TODO este código abaixo e clique em "RUN"
 -- ==============================================================================
 
 -- 1. Habilitar extensões necessárias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Ajustes de compatibilidade em tabelas existentes
-ALTER TABLE IF EXISTS public.users DROP CONSTRAINT IF EXISTS users_id_fkey;
-ALTER TABLE IF EXISTS public.users ALTER COLUMN id SET DEFAULT uuid_generate_v4();
-ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
-ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS has_break BOOLEAN DEFAULT true;
-ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS break_start TIME DEFAULT '12:00:00';
-ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS break_end TIME DEFAULT '13:00:00';
-ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS slot_interval INT DEFAULT 60;
-
 -- ==============================================================================
--- 2. TABELAS PRINCIPAIS MULTI-TENANT
+-- 2. TABELAS PRINCIPAIS DO SISTEMA
 -- ==============================================================================
 
 -- A. TABELA ORGANIZATIONS (Barbearias / Estabelecimentos)
@@ -58,10 +52,16 @@ CREATE TABLE IF NOT EXISTS public.users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Compatibilidade caso a tabela já existisse com chave estrangeira restritiva
+ALTER TABLE IF EXISTS public.users DROP CONSTRAINT IF EXISTS users_id_fkey;
+ALTER TABLE IF EXISTS public.users ALTER COLUMN id SET DEFAULT uuid_generate_v4();
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
+
 CREATE INDEX IF NOT EXISTS idx_users_org ON public.users (organization_id);
 CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (organization_id, role);
 
--- C. TABELA SERVICES (Catálogo de Serviços)
+-- C. TABELA SERVICES (Catálogo de Serviços da Barbearia)
 CREATE TABLE IF NOT EXISTS public.services (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS public.products (
 
 CREATE INDEX IF NOT EXISTS idx_products_org ON public.products (organization_id);
 
--- E. TABELA SCHEDULES (Horários Gerais do Salão e Escalas Individuais por Barbeiro)
+-- E. TABELA SCHEDULES (Horários Gerais e Escalas Individuais por Barbeiro)
 CREATE TABLE IF NOT EXISTS public.schedules (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS public.schedules (
   start_time TIME NOT NULL DEFAULT '09:00:00',
   end_time TIME NOT NULL DEFAULT '19:00:00',
   is_closed BOOLEAN NOT NULL DEFAULT false,
-  has_break BOOLEAN NOT NULL DEFAULT true,
+  has_break BOOLEAN NOT NULL DEFAULT false,
   break_start TIME DEFAULT '12:00:00',
   break_end TIME DEFAULT '13:00:00',
   slot_interval INT NOT NULL DEFAULT 60,
@@ -110,9 +110,15 @@ CREATE TABLE IF NOT EXISTS public.schedules (
   CONSTRAINT unique_org_user_day UNIQUE (organization_id, user_id, day_of_week)
 );
 
+-- Compatibilidade caso a tabela schedules já existisse sem as colunas de pausa
+ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS has_break BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS break_start TIME DEFAULT '12:00:00';
+ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS break_end TIME DEFAULT '13:00:00';
+ALTER TABLE IF EXISTS public.schedules ADD COLUMN IF NOT EXISTS slot_interval INT DEFAULT 60;
+
 CREATE INDEX IF NOT EXISTS idx_schedules_org_user ON public.schedules (organization_id, user_id, day_of_week);
 
--- F. TABELA APPOINTMENTS (Agendamentos)
+-- F. TABELA APPOINTMENTS (Agendamentos do Salão)
 CREATE TABLE IF NOT EXISTS public.appointments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -184,7 +190,7 @@ ALTER TABLE public.customer_subscriptions ENABLE ROW LEVEL SECURITY;
 -- 4. FUNÇÕES AUXILIARES DE SEGURANÇA (ISOLAMENTO MULTI-TENANT E PERFIS)
 -- ==============================================================================
 
--- Retorna a organização do usuário logado
+-- Retorna a organização do usuário autenticado no Supabase
 CREATE OR REPLACE FUNCTION public.get_auth_org_id()
 RETURNS UUID
 LANGUAGE sql
@@ -195,7 +201,7 @@ AS $$
   SELECT organization_id FROM public.users WHERE id = auth.uid() OR auth_user_id = auth.uid() LIMIT 1;
 $$;
 
--- Retorna o cargo (role) do usuário logado ('owner', 'admin', 'barber')
+-- Retorna o cargo (role) do usuário autenticado ('owner', 'admin', 'barber')
 CREATE OR REPLACE FUNCTION public.get_auth_user_role()
 RETURNS TEXT
 LANGUAGE sql
@@ -210,7 +216,7 @@ $$;
 -- 5. POLÍTICAS DE SEGURANÇA BLINDADAS (RLS)
 -- ==============================================================================
 
--- A. Limpeza de políticas existentes
+-- Limpeza de políticas existentes para re-execução limpa
 DROP POLICY IF EXISTS "Public Read Organizations" ON public.organizations;
 DROP POLICY IF EXISTS "Public Read Services" ON public.services;
 DROP POLICY IF EXISTS "Public Read Products" ON public.products;
@@ -233,7 +239,7 @@ DROP POLICY IF EXISTS "Tenant Manage Own Appointments" ON public.appointments;
 DROP POLICY IF EXISTS "Tenant Manage Own Plans" ON public.membership_plans;
 DROP POLICY IF EXISTS "Tenant Manage Own Subscriptions" ON public.customer_subscriptions;
 
--- B. Políticas Públicas (Vitrine de Agendamento do Cliente - Acesso Anônimo Seguro)
+-- A. Políticas Públicas (Vitrine de Agendamento do Cliente - Acesso Anônimo Seguro)
 CREATE POLICY "Public Read Organizations" ON public.organizations
   FOR SELECT TO anon, authenticated USING (true);
 
@@ -258,7 +264,7 @@ CREATE POLICY "Public Create Appointment" ON public.appointments
 CREATE POLICY "Public Read Subscriptions Verification" ON public.customer_subscriptions
   FOR SELECT TO anon, authenticated USING (status = 'active');
 
--- C. Políticas do Dono / Administrador (Acesso Completo ao Estabelecimento)
+-- B. Políticas do Dono / Administrador (Acesso e Gestão Total do Estabelecimento)
 CREATE POLICY "Tenant Manage Own Organization" ON public.organizations
   FOR ALL TO authenticated
   USING (id = public.get_auth_org_id())
@@ -300,7 +306,7 @@ CREATE POLICY "Tenant Manage Own Subscriptions" ON public.customer_subscriptions
   WITH CHECK (organization_id = public.get_auth_org_id());
 
 -- ==============================================================================
--- 6. FUNÇÃO PARA DECREMENTAR ESTOQUE DE PRODUTOS VIA BANCO
+-- 6. FUNÇÃO RPC PARA BAIXA AUTOMÁTICA DE ESTOQUE
 -- ==============================================================================
 
 CREATE OR REPLACE FUNCTION public.decrement_product_stock(
@@ -322,7 +328,7 @@ END;
 $$;
 
 -- ==============================================================================
--- 7. TRIGGER AUTOMÁTICO: ONBOARDING DE NOVO PROPRIETÁRIO
+-- 7. TRIGGER AUTOMÁTICO: CRIAÇÃO DE BARBEARIA E ONBOARDING DO DONO
 -- ==============================================================================
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -377,15 +383,15 @@ BEGIN
   );
 
   -- Horários Padrão da Barbearia (Geral - user_id NULL)
-  INSERT INTO public.schedules (organization_id, user_id, day_of_week, start_time, end_time, is_closed)
+  INSERT INTO public.schedules (organization_id, user_id, day_of_week, start_time, end_time, is_closed, has_break, break_start, break_end, slot_interval)
   VALUES
-    (new_org_id, NULL, 0, '09:00:00', '14:00:00', true),
-    (new_org_id, NULL, 1, '09:00:00', '19:00:00', false),
-    (new_org_id, NULL, 2, '09:00:00', '19:00:00', false),
-    (new_org_id, NULL, 3, '09:00:00', '19:00:00', false),
-    (new_org_id, NULL, 4, '09:00:00', '19:00:00', false),
-    (new_org_id, NULL, 5, '09:00:00', '20:00:00', false),
-    (new_org_id, NULL, 6, '08:30:00', '18:00:00', false);
+    (new_org_id, NULL, 0, '09:00:00', '14:00:00', true, false, '12:00:00', '13:00:00', 60),
+    (new_org_id, NULL, 1, '09:00:00', '19:00:00', false, false, '12:00:00', '13:00:00', 60),
+    (new_org_id, NULL, 2, '09:00:00', '19:00:00', false, false, '12:00:00', '13:00:00', 60),
+    (new_org_id, NULL, 3, '09:00:00', '19:00:00', false, false, '12:00:00', '13:00:00', 60),
+    (new_org_id, NULL, 4, '09:00:00', '19:00:00', false, false, '12:00:00', '13:00:00', 60),
+    (new_org_id, NULL, 5, '09:00:00', '20:00:00', false, false, '12:00:00', '13:00:00', 60),
+    (new_org_id, NULL, 6, '08:30:00', '18:00:00', false, false, '12:00:00', '13:00:00', 60);
 
   -- Serviços Iniciais Padrão
   INSERT INTO public.services (organization_id, name, description, price, duration)
