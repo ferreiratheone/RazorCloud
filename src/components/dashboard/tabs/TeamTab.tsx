@@ -8,7 +8,10 @@ import {
   Mail, 
   Loader2,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  KeyRound,
+  MessageCircle,
+  Check
 } from 'lucide-react';
 import { DataService } from '@/src/lib/data-service';
 import type { Organization, UserProfile } from '@/src/types/database';
@@ -68,9 +71,18 @@ export function TeamTab({ organization }: TeamTabProps) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<'owner' | 'barber' | 'admin'>('barber');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Credenciais geradas para envio fácil via WhatsApp
+  const [justCreatedCreds, setJustCreatedCreds] = useState<{
+    name: string;
+    email: string;
+    phone?: string;
+    password?: string;
+  } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -95,6 +107,7 @@ export function TeamTab({ organization }: TeamTabProps) {
     setFullName('');
     setEmail('');
     setPhone('');
+    setPassword('');
     setRole('barber');
     setAvatarUrl('');
     setIsModalOpen(true);
@@ -105,6 +118,7 @@ export function TeamTab({ organization }: TeamTabProps) {
     setFullName(member.full_name);
     setEmail(member.email || '');
     setPhone(member.phone || '');
+    setPassword('');
     setRole(member.role);
     setAvatarUrl(member.avatar_url || '');
     setIsModalOpen(true);
@@ -143,11 +157,21 @@ export function TeamTab({ organization }: TeamTabProps) {
           full_name: fullName.trim(),
           email: email.trim() || undefined,
           phone: phone.trim() || undefined,
+          password: password.trim() || undefined,
           role,
           avatar_url: avatarUrl.trim() || undefined,
           active: true,
         });
         setTeam(prev => [created, ...prev.filter(m => m.id !== created.id)]);
+
+        if (password.trim() && email.trim()) {
+          setJustCreatedCreds({
+            name: fullName.trim(),
+            email: email.trim(),
+            phone: phone.trim() || undefined,
+            password: password.trim(),
+          });
+        }
       }
       setIsModalOpen(false);
     } catch (e) {
@@ -247,6 +271,19 @@ export function TeamTab({ organization }: TeamTabProps) {
               </div>
 
               <div className="flex items-center gap-1">
+                {member.phone && (
+                  <a
+                    href={`https://wa.me/55${member.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                      `Fala ${member.full_name}! 💈✂️\n\nSeu acesso ao painel da barbearia ${organization.name} está liberado:\n\n🔗 Link: ${typeof window !== 'undefined' ? window.location.origin : 'https://razorcloud.vercel.app'}\n📧 Seu E-mail: ${member.email || 'Informe seu e-mail cadastrado'}\n\nAcesse pelo seu celular para ver sua agenda e configurar seus horários de trabalho!`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 text-emerald-400 hover:text-emerald-300 rounded-lg hover:bg-emerald-950/40 transition-colors"
+                    title="Enviar dados de acesso via WhatsApp"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                  </a>
+                )}
                 <button 
                   onClick={() => handleOpenEdit(member)}
                   className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
@@ -313,15 +350,40 @@ export function TeamTab({ organization }: TeamTabProps) {
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs text-zinc-400 font-medium block mb-1">E-mail (Opcional)</label>
-                <input 
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="matheus@barbearia.com"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
-                />
+              {/* Seção de Acesso ao Painel do Barbeiro */}
+              <div className="p-3.5 bg-zinc-950/70 border border-zinc-800 rounded-xl space-y-2.5">
+                <div className="flex items-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5 text-emerald-400" />
+                  <h4 className="text-xs font-bold text-white">Acesso ao Painel do Barbeiro</h4>
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Defina um e-mail e senha para o profissional fazer login pelo celular e acessar a própria agenda e horários.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[11px] text-zinc-400 font-medium block mb-1">E-mail de Login</label>
+                    <input 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="barbeiro@email.com"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-zinc-400 font-medium block mb-1">
+                      {editingMember ? 'Nova Senha (Opcional)' : 'Senha Inicial'}
+                    </label>
+                    <input 
+                      type="password" 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={editingMember ? 'Deixe vazio p/ manter' : 'Mínimo 6 dígitos'}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Upload da Foto do Barbeiro */}
@@ -387,6 +449,53 @@ export function TeamTab({ organization }: TeamTabProps) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Sucesso com Compartilhamento das Credenciais via WhatsApp */}
+      {justCreatedCreds && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4 animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto shadow-lg">
+              <Check className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-base font-bold text-white">Barbeiro Criado com Sucesso!</h3>
+              <p className="text-xs text-zinc-400 mt-1">
+                A conta de acesso para <strong>{justCreatedCreds.name}</strong> foi registrada no sistema.
+              </p>
+            </div>
+
+            <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-3.5 text-left text-xs space-y-1.5 font-mono">
+              <p className="text-zinc-400">📧 E-mail: <span className="text-white font-sans">{justCreatedCreds.email}</span></p>
+              <p className="text-zinc-400">🔑 Senha: <span className="text-emerald-400 font-sans">{justCreatedCreds.password}</span></p>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              {justCreatedCreds.phone && (
+                <a
+                  href={`https://wa.me/55${justCreatedCreds.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                    `Fala ${justCreatedCreds.name}! 💈✂️\n\nSeu acesso ao painel da ${organization.name} já foi criado:\n\n🔗 Link: ${typeof window !== 'undefined' ? window.location.origin : 'https://razorcloud.vercel.app'}\n📧 E-mail: ${justCreatedCreds.email}\n🔑 Senha: ${justCreatedCreds.password}\n\nAcesse pelo seu celular para ver sua agenda e configurar seus horários de atendimento!`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setJustCreatedCreds(null)}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                >
+                  <MessageCircle className="w-4 h-4" /> Enviar Dados pelo WhatsApp
+                </a>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setJustCreatedCreds(null)}
+                className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl transition-colors"
+              >
+                Concluir
+              </button>
+            </div>
           </div>
         </div>
       )}

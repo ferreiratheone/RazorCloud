@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase/client';
+import { supabase, isSupabaseConfigured, createIsolatedClient } from './supabase/client';
 import type { 
   Organization, 
   UserProfile, 
@@ -640,8 +640,38 @@ export const DataService = {
     }
   },
 
-  async createTeamMember(member: Partial<UserProfile> & { organization_id: string }): Promise<UserProfile> {
-    return this.saveBarber(member);
+  async createTeamMember(member: Partial<UserProfile> & { organization_id: string; password?: string }): Promise<UserProfile> {
+    const { password, ...barberData } = member;
+
+    // Se o dono forneceu e-mail e senha, registrar no Supabase Auth com client isolado sem deslogar o dono
+    if (password && barberData.email && isSupabaseConfigured()) {
+      try {
+        const isolated = createIsolatedClient();
+        const { data: authResult, error: authError } = await isolated.auth.signUp({
+          email: barberData.email.trim(),
+          password: password.trim(),
+          options: {
+            data: {
+              full_name: barberData.full_name || 'Barbeiro',
+              role: barberData.role || 'barber',
+              phone: barberData.phone || '',
+              organization_id: barberData.organization_id,
+            },
+          },
+        });
+
+        if (authError) {
+          console.warn('Aviso ao criar credencial no Supabase Auth:', authError);
+        } else if (authResult?.user) {
+          barberData.id = authResult.user.id;
+          (barberData as any).auth_user_id = authResult.user.id;
+        }
+      } catch (err) {
+        console.warn('Erro ao registrar credenciais de acesso no Auth:', err);
+      }
+    }
+
+    return this.saveBarber(barberData);
   },
 
   async updateTeamMember(id: string, updates: Partial<UserProfile>, orgId: string): Promise<UserProfile> {

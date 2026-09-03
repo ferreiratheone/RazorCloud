@@ -32,3 +32,17 @@ export function createClient() {
 }
 
 export const supabase = createClient();
+
+/**
+ * Cliente isolado sem persistência de sessão para criar contas de funcionários
+ * sem deslogar o proprietário atual.
+ */
+export function createIsolatedClient() {
+  return createSupabaseClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
