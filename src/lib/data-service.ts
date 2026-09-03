@@ -532,6 +532,33 @@ export const DataService = {
     return enabled;
   },
 
+  async decrementProductStock(productId: string, quantity: number, orgId: string): Promise<void> {
+    const products = await this.getProducts(orgId);
+    const prod = products.find(p => p.id === productId);
+    if (!prod) return;
+
+    const currentStock = prod.stock ?? 50;
+    const newStock = Math.max(0, currentStock - quantity);
+    const updatedProd = { ...prod, stock: newStock };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId);
+        if (isUuid) {
+          await supabase
+            .from('products')
+            .update({ stock: newStock, updated_at: new Date().toISOString() })
+            .eq('id', productId);
+        }
+      } catch (e) {
+        console.error('Erro ao diminuir estoque no Supabase:', e);
+      }
+    }
+
+    const updatedList = products.map(p => p.id === productId ? updatedProd : p);
+    setLocalData('products_' + orgId, updatedList);
+  },
+
   // --- EQUIPE DE BARBEIROS ---
   async getTeam(orgId: string): Promise<UserProfile[]> {
     if (isSupabaseConfigured()) {
@@ -842,6 +869,18 @@ export const DataService = {
   },
 
   async updateAppointmentStatus(id: string, status: Appointment['status'], orgId: string): Promise<void> {
+    const list = getLocalData<Appointment[]>('appointments_' + orgId, []);
+    const apt = list.find(a => a.id === id);
+
+    // Quando o atendimento for marcado como concluído, dar baixa automática no estoque de cada produto
+    if (status === 'completed' && apt && Array.isArray(apt.products)) {
+      for (const item of apt.products) {
+        if (item.product_id && item.quantity > 0) {
+          await this.decrementProductStock(item.product_id, item.quantity, orgId);
+        }
+      }
+    }
+
     if (isSupabaseConfigured()) {
       try {
         const { error } = await supabase.from('appointments').update({ status }).eq('id', id);
@@ -851,7 +890,6 @@ export const DataService = {
       }
     }
 
-    const list = getLocalData<Appointment[]>('appointments_' + orgId, []);
     const updated = list.map(a => a.id === id ? { ...a, status } : a);
     setLocalData('appointments_' + orgId, updated);
   },

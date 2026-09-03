@@ -778,7 +778,11 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
                   </div>
 
                   <div className="shrink-0 flex items-center gap-1.5">
-                    {qty === 0 ? (
+                    {prod.stock !== undefined && prod.stock <= 0 ? (
+                      <span className="text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded-lg">
+                        Esgotado
+                      </span>
+                    ) : qty === 0 ? (
                       <button
                         type="button"
                         onClick={() => toggleProductQuantity(prod.id, 1)}
@@ -798,8 +802,9 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
                         <span className="text-xs font-bold text-white px-1.5">{qty}</span>
                         <button
                           type="button"
+                          disabled={prod.stock !== undefined && qty >= prod.stock}
                           onClick={() => toggleProductQuantity(prod.id, 1)}
-                          className="w-6 h-6 rounded bg-purple-600 text-white flex items-center justify-center hover:bg-purple-500 transition-colors"
+                          className="w-6 h-6 rounded bg-purple-600 text-white flex items-center justify-center hover:bg-purple-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Plus className="w-3 h-3" />
                         </button>

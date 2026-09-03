@@ -14,7 +14,8 @@ import {
   MessageCircle,
   Crown,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ShoppingBag
 } from 'lucide-react';
 import { DataService, getLocalDateString } from '@/src/lib/data-service';
 import { OnboardingChecklist } from '../OnboardingChecklist';
@@ -467,6 +468,18 @@ export function AgendaTab({ organization, onNavigateTab, onViewPublicPage }: Age
                             </>
                           )}
                         </div>
+
+                        {/* Produtos da Barbearia Solicitados no Agendamento */}
+                        {Array.isArray(apt.products) && apt.products.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                            {apt.products.map((p, pIdx) => (
+                              <span key={pIdx} className="text-[10px] bg-purple-500/15 text-purple-300 border border-purple-500/25 px-2 py-0.5 rounded-lg flex items-center gap-1 font-semibold">
+                                <ShoppingBag className="w-3 h-3 text-purple-400" />
+                                {p.quantity}x {p.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
 

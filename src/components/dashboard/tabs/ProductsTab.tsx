@@ -146,6 +146,14 @@ export function ProductsTab({ organization, onUpdateOrg }: ProductsTabProps) {
     await DataService.saveProduct(updated);
   }
 
+  async function handleQuickStockChange(product: Product, delta: number) {
+    const currentStock = product.stock ?? 50;
+    const newStock = Math.max(0, currentStock + delta);
+    const updated = { ...product, stock: newStock };
+    setProducts(prev => prev.map(p => p.id === product.id ? updated : p));
+    await DataService.saveProduct(updated);
+  }
+
   const filteredProducts = activeCategory === 'all' 
     ? products 
     : products.filter(p => p.category === activeCategory);
@@ -294,11 +302,41 @@ export function ProductsTab({ organization, onUpdateOrg }: ProductsTabProps) {
                 </div>
               </div>
 
-              {/* Footer do Card */}
+              {/* Footer do Card com Controle Rápido de Estoque */}
               <div className="pt-3.5 mt-3 border-t border-zinc-800/60 flex items-center justify-between">
-                <span className="text-[11px] text-zinc-500 flex items-center gap-1">
-                  <Package className="w-3.5 h-3.5" /> Estoque: <strong className="text-zinc-300">{prod.stock ?? 50} un</strong>
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider flex items-center gap-1">
+                    <Package className="w-3 h-3 text-zinc-400" /> Estoque:
+                  </span>
+                  
+                  <div className="flex items-center gap-1 bg-zinc-950/80 border border-zinc-800 rounded-lg p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleQuickStockChange(prod, -1)}
+                      title="Diminuir 1 do estoque"
+                      className="w-5 h-5 rounded flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-bold"
+                    >
+                      -
+                    </button>
+                    <span className={`text-xs font-extrabold px-1 ${
+                      (prod.stock ?? 50) === 0 
+                        ? 'text-red-400' 
+                        : (prod.stock ?? 50) <= 5 
+                          ? 'text-amber-400' 
+                          : 'text-emerald-400'
+                    }`}>
+                      {prod.stock ?? 50}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickStockChange(prod, 1)}
+                      title="Adicionar 1 ao estoque"
+                      className="w-5 h-5 rounded flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs font-bold"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
 
                 <div className="flex items-center gap-1.5">
                   <button
