@@ -124,11 +124,6 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
     setSavedSuccess(false);
   }
 
-  function handleGlobalIntervalChange(interval: number) {
-    setSchedules(prev => prev.map(s => ({ ...s, slot_interval: interval })));
-    setSavedSuccess(false);
-  }
-
   async function handleSave() {
     setIsSaving(true);
     try {
@@ -143,7 +138,6 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
   }
 
   const activeBarber = team.find(t => t.id === selectedUserId);
-  const currentInterval = schedules[1]?.slot_interval || 60;
 
   return (
     <div className="space-y-6 max-w-full overflow-hidden">
@@ -178,78 +172,38 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
         </button>
       </div>
 
-      {/* Seletor de Escala & Intervalo de Agendamentos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Seletor de Barbeiro (para o Dono) */}
-        {isOwner && (
-          <div className="lg:col-span-2 bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-sm">
-            <span className="text-xs font-bold text-zinc-300">Configurar Horários de:</span>
-            <div className="flex items-center gap-1.5 overflow-x-auto max-w-full scrollbar-none">
+      {/* Seletor de Barbeiro (para o Dono) */}
+      {isOwner && (
+        <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+          <span className="text-xs font-bold text-zinc-300">Configurar Horários de:</span>
+          <div className="flex items-center gap-1.5 overflow-x-auto max-w-full scrollbar-none">
+            <button
+              onClick={() => setSelectedUserId(null)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 ${
+                selectedUserId === null 
+                  ? 'bg-white text-zinc-950 font-bold shadow-sm' 
+                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" /> Geral da Barbearia
+            </button>
+
+            {team.map((barber) => (
               <button
-                onClick={() => setSelectedUserId(null)}
+                key={barber.id}
+                onClick={() => setSelectedUserId(barber.id)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 ${
-                  selectedUserId === null 
-                    ? 'bg-white text-zinc-950 font-bold shadow-sm' 
+                  selectedUserId === barber.id 
+                    ? 'bg-emerald-500 text-zinc-950 font-bold shadow-sm' 
                     : 'bg-zinc-800 text-zinc-400 hover:text-white'
                 }`}
               >
-                <Building2 className="w-3.5 h-3.5" /> Geral da Barbearia
+                <User className="w-3.5 h-3.5" /> {barber.full_name}
               </button>
-
-              {team.map((barber) => (
-                <button
-                  key={barber.id}
-                  onClick={() => setSelectedUserId(barber.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 ${
-                    selectedUserId === barber.id 
-                      ? 'bg-emerald-500 text-zinc-950 font-bold shadow-sm' 
-                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <User className="w-3.5 h-3.5" /> {barber.full_name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Seletor de Intervalo entre Agendamentos */}
-        <div className={`bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-between gap-2.5 shadow-sm ${!isOwner ? 'lg:col-span-3' : ''}`}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Grade de Agendamento:
-            </span>
-            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-500/20">
-              {currentInterval === 60 ? 'De 1 em 1 hora' : `A cada ${currentInterval} min`}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleGlobalIntervalChange(60)}
-              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all text-center ${
-                currentInterval === 60 
-                  ? 'bg-white text-zinc-950 shadow-md' 
-                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
-              }`}
-            >
-              1 em 1 Hora (Recomendado)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleGlobalIntervalChange(30)}
-              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all text-center ${
-                currentInterval === 30 
-                  ? 'bg-white text-zinc-950 shadow-md' 
-                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
-              }`}
-            >
-              A cada 30 min
-            </button>
+            ))}
           </div>
         </div>
-      </div>
+      )}
 
       {/* Grade de 7 Dias com Suporte a Pausa / Almoço */}
       {loading ? (
