@@ -192,7 +192,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT organization_id FROM public.users WHERE id = auth.uid() LIMIT 1;
+  SELECT organization_id FROM public.users WHERE id = auth.uid() OR auth_user_id = auth.uid() LIMIT 1;
 $$;
 
 -- Retorna o cargo (role) do usuário logado ('owner', 'admin', 'barber')
@@ -203,7 +203,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT role FROM public.users WHERE id = auth.uid() LIMIT 1;
+  SELECT role FROM public.users WHERE id = auth.uid() OR auth_user_id = auth.uid() LIMIT 1;
 $$;
 
 -- ==============================================================================

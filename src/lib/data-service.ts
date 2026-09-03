@@ -561,6 +561,8 @@ export const DataService = {
 
   // --- EQUIPE DE BARBEIROS ---
   async getTeam(orgId: string): Promise<UserProfile[]> {
+    const localList = getLocalData<UserProfile[]>('team_' + orgId, []);
+
     if (isSupabaseConfigured()) {
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
@@ -571,9 +573,15 @@ export const DataService = {
             .eq('organization_id', orgId)
             .order('role', { ascending: true });
 
-          if (!error && Array.isArray(data) && data.length > 0) {
-            setLocalData('team_' + orgId, data);
-            return data as UserProfile[];
+          if (!error && Array.isArray(data)) {
+            const map = new Map<string, UserProfile>();
+            for (const b of localList) map.set(b.id, b);
+            for (const b of (data as UserProfile[])) map.set(b.id, b);
+            const merged = Array.from(map.values());
+            if (merged.length > 0) {
+              setLocalData('team_' + orgId, merged);
+              return merged;
+            }
           }
         }
       } catch (e) {
@@ -581,7 +589,11 @@ export const DataService = {
       }
     }
 
-    return getLocalData<UserProfile[]>('team_' + orgId, [
+    if (localList && localList.length > 0) {
+      return localList;
+    }
+
+    return [
       {
         id: 'barber-1',
         organization_id: orgId,
@@ -591,7 +603,7 @@ export const DataService = {
         phone: '(11) 98888-7777',
         active: true,
       },
-    ]);
+    ];
   },
 
   async saveBarber(barber: Partial<UserProfile> & { organization_id: string }): Promise<UserProfile> {
@@ -615,6 +627,12 @@ export const DataService = {
       active: barber.active ?? true,
       created_at: new Date().toISOString(),
     };
+
+    // Salvar local imediatamente
+    const currentList = getLocalData<UserProfile[]>('team_' + barber.organization_id, []);
+    const filteredLocal = currentList.filter(b => b.id !== barberId && b.id !== barber.id);
+    const updatedLocal = [finalBarber, ...filteredLocal];
+    setLocalData('team_' + barber.organization_id, updatedLocal);
 
     if (isSupabaseConfigured()) {
       try {
@@ -656,14 +674,14 @@ export const DataService = {
       }
     }
 
-    const list = getLocalData<UserProfile[]>('team_' + barber.organization_id, []);
-    const filtered = list.filter(b => b.id !== barberId && b.id !== barber.id);
-    const updated = [finalBarber, ...filtered];
-    setLocalData('team_' + barber.organization_id, updated);
     return finalBarber;
   },
 
   async deleteBarber(id: string, orgId: string): Promise<void> {
+    const currentList = getLocalData<UserProfile[]>('team_' + orgId, []);
+    const updated = currentList.filter(b => b.id !== id);
+    setLocalData('team_' + orgId, updated);
+
     if (isSupabaseConfigured()) {
       try {
         await supabase.from('users').delete().eq('id', id);
@@ -671,10 +689,6 @@ export const DataService = {
         console.error('Erro ao excluir barbeiro no Supabase:', e);
       }
     }
-
-    const list = await this.getTeam(orgId);
-    const updated = list.filter(b => b.id !== id);
-    setLocalData('team_' + orgId, updated);
   },
 
   async createTeamMember(member: Partial<UserProfile> & { organization_id: string }): Promise<UserProfile> {
@@ -694,6 +708,9 @@ export const DataService = {
 
   // --- HORÁRIOS DE FUNCIONAMENTO & ESCALAS INDIVIDUAIS ---
   async getSchedules(orgId: string, userId?: string | null): Promise<Schedule[]> {
+    const cacheKey = `schedules_${orgId}_${userId || 'general'}`;
+    const localList = getLocalData<Schedule[]>(cacheKey, []);
+
     if (isSupabaseConfigured()) {
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
@@ -712,9 +729,13 @@ export const DataService = {
           const { data, error } = await query.order('day_of_week', { ascending: true });
 
           if (!error && Array.isArray(data) && data.length > 0) {
-            const cacheKey = `schedules_${orgId}_${userId || 'general'}`;
-            setLocalData(cacheKey, data);
-            return data as Schedule[];
+            const formatted = (data as Schedule[]).map(s => ({
+              ...s,
+              has_break: Boolean(s.has_break),
+              is_closed: Boolean(s.is_closed),
+            }));
+            setLocalData(cacheKey, formatted);
+            return formatted;
           }
         }
       } catch (e) {
@@ -722,35 +743,76 @@ export const DataService = {
       }
     }
 
-    const cacheKey = `schedules_${orgId}_${userId || 'general'}`;
+    if (localList && localList.length > 0) {
+      return localList;
+    }
+
     const fallback = DEFAULT_SCHEDULES_FACTORY(orgId).map(s => ({
       ...s,
       user_id: userId || null,
       id: `sch-${s.day_of_week}-${orgId}-${userId || 'general'}`
     }));
-    return getLocalData<Schedule[]>(cacheKey, fallback);
+    return fallback;
   },
 
   async saveSchedules(orgId: string, schedules: Schedule[], userId?: string | null): Promise<void> {
-    const formatted = schedules.map(s => ({
-      ...s,
-      organization_id: orgId,
-      user_id: userId || null,
-    }));
+    const cacheKey = `schedules_${orgId}_${userId || 'general'}`;
+    const formatted = schedules.map(s => {
+      const isUuid = s.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id);
+      return {
+        ...s,
+        id: isUuid ? s.id : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : s.id),
+        organization_id: orgId,
+        user_id: userId || null,
+        day_of_week: Number(s.day_of_week),
+        start_time: s.start_time.length === 5 ? s.start_time + ':00' : s.start_time,
+        end_time: s.end_time.length === 5 ? s.end_time + ':00' : s.end_time,
+        is_closed: Boolean(s.is_closed),
+        has_break: Boolean(s.has_break),
+        break_start: s.break_start ? (s.break_start.length === 5 ? s.break_start + ':00' : s.break_start) : '12:00:00',
+        break_end: s.break_end ? (s.break_end.length === 5 ? s.break_end + ':00' : s.break_end) : '13:00:00',
+        slot_interval: Number(s.slot_interval) || 60,
+      };
+    });
+
+    // Salvar local imediatamente
+    setLocalData(cacheKey, formatted);
 
     if (isSupabaseConfigured()) {
       try {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
-        if (isUuid) {
-          await supabase.from('schedules').upsert(formatted);
+        const isUuidOrg = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
+        if (isUuidOrg) {
+          const payload = formatted.map(s => {
+            const clean: any = {
+              organization_id: s.organization_id,
+              user_id: s.user_id,
+              day_of_week: s.day_of_week,
+              start_time: s.start_time,
+              end_time: s.end_time,
+              is_closed: s.is_closed,
+              has_break: s.has_break,
+              break_start: s.break_start,
+              break_end: s.break_end,
+              slot_interval: s.slot_interval,
+            };
+            if (s.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id)) {
+              clean.id = s.id;
+            }
+            return clean;
+          });
+
+          const { error } = await supabase
+            .from('schedules')
+            .upsert(payload, { onConflict: 'organization_id,user_id,day_of_week' });
+
+          if (error) {
+            console.error('Erro detalhado ao salvar horários no Supabase:', error);
+          }
         }
       } catch (e) {
-        console.error('Erro ao salvar horários:', e);
+        console.error('Erro ao salvar horários no Supabase:', e);
       }
     }
-
-    const cacheKey = `schedules_${orgId}_${userId || 'general'}`;
-    setLocalData(cacheKey, formatted);
   },
 
   // --- AGENDAMENTOS (APPOINTMENTS) ---

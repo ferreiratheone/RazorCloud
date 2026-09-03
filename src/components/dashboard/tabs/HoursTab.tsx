@@ -63,7 +63,8 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
           if (existing) {
             fullWeek.push({
               ...existing,
-              has_break: existing.has_break ?? true,
+              is_closed: Boolean(existing.is_closed),
+              has_break: Boolean(existing.has_break),
               break_start: existing.break_start || '12:00',
               break_end: existing.break_end || '13:00',
               slot_interval: existing.slot_interval || 60,
@@ -77,7 +78,7 @@ export function HoursTab({ organization, currentUser }: HoursTabProps) {
               start_time: '09:00',
               end_time: '19:00',
               is_closed: day === 0, // Domingo fechado por padrão
-              has_break: true,
+              has_break: false,
               break_start: '12:00',
               break_end: '13:00',
               slot_interval: 60, // 1 em 1 hora
