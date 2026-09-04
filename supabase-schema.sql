@@ -401,3 +401,106 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ==============================================================================
+-- 8. FUNÇÃO RPC PARA DEFINIR / ALTERAR SENHA DO BARBEIRO PELO DONO
+-- ==============================================================================
+
+CREATE OR REPLACE FUNCTION public.set_barber_password(
+  target_user_id UUID,
+  new_password TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, extensions
+AS $$
+DECLARE
+  v_caller_auth_id UUID;
+  v_caller_org_id UUID;
+  v_target_org_id UUID;
+  v_auth_user_id UUID;
+  v_user_email TEXT;
+BEGIN
+  -- 1. Obter auth id de quem está executando a ação
+  v_caller_auth_id := auth.uid();
+
+  -- 2. Localizar a organização do dono/administrador chamador
+  SELECT organization_id INTO v_caller_org_id 
+  FROM public.users 
+  WHERE id = v_caller_auth_id OR auth_user_id = v_caller_auth_id 
+  LIMIT 1;
+
+  -- 3. Obter dados do barbeiro alvo
+  SELECT organization_id, auth_user_id, email 
+  INTO v_target_org_id, v_auth_user_id, v_user_email
+  FROM public.users
+  WHERE id = target_user_id;
+
+  IF v_target_org_id IS NULL THEN
+    SELECT organization_id, auth_user_id, email 
+    INTO v_target_org_id, v_auth_user_id, v_user_email
+    FROM public.users
+    WHERE auth_user_id = target_user_id;
+  END IF;
+
+  -- Validação de tenant
+  IF v_target_org_id IS NULL OR v_caller_org_id IS NULL OR v_caller_org_id != v_target_org_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Permissão negada para alterar a senha deste usuário.');
+  END IF;
+
+  -- 4. Se o barbeiro já tem auth_user_id vinculado
+  IF v_auth_user_id IS NOT NULL THEN
+    UPDATE auth.users
+    SET encrypted_password = extensions.crypt(new_password, extensions.gen_salt('bf')),
+        email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+        updated_at = NOW()
+    WHERE id = v_auth_user_id;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Senha atualizada com sucesso.');
+  END IF;
+
+  -- 5. Se tiver e-mail mas auth_user_id ainda não foi preenchido na public.users
+  IF v_user_email IS NOT NULL THEN
+    SELECT id INTO v_auth_user_id 
+    FROM auth.users 
+    WHERE email = LOWER(TRIM(v_user_email)) 
+    LIMIT 1;
+
+    IF v_auth_user_id IS NOT NULL THEN
+      UPDATE auth.users
+      SET encrypted_password = extensions.crypt(new_password, extensions.gen_salt('bf')),
+          email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+          updated_at = NOW()
+      WHERE id = v_auth_user_id;
+
+      UPDATE public.users 
+      SET auth_user_id = v_auth_user_id 
+      WHERE id = target_user_id;
+
+      RETURN jsonb_build_object('success', true, 'message', 'Senha atualizada e usuário vinculado com sucesso.');
+    END IF;
+  END IF;
+
+  -- Se o usuário ainda não existe em auth.users, sinalizar para criar via signUp
+  RETURN jsonb_build_object('success', true, 'needs_signup', true);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.set_barber_password(UUID, TEXT) TO authenticated, anon;
+
+-- ==============================================================================
+-- 9. CONFIRMAÇÃO AUTOMÁTICA DE E-MAILS (DISPENSA VERIFICAÇÃO DE CAIXA DE ENTRADA)
+-- ==============================================================================
+
+-- Liberar login imediato para todas as contas criadas até o momento
+UPDATE auth.users
+SET email_confirmed_at = NOW()
+WHERE email_confirmed_at IS NULL;
+
+-- Vincular auth_user_id nos registros da public.users que compartilham o mesmo e-mail
+UPDATE public.users u
+SET auth_user_id = a.id
+FROM auth.users a
+WHERE LOWER(TRIM(u.email)) = LOWER(TRIM(a.email))
+  AND u.auth_user_id IS NULL;

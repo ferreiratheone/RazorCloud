@@ -11,7 +11,9 @@ import {
   Image as ImageIcon,
   KeyRound,
   MessageCircle,
-  Check
+  Check,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { DataService } from '@/src/lib/data-service';
 import type { Organization, UserProfile } from '@/src/types/database';
@@ -74,6 +76,7 @@ export function TeamTab({ organization }: TeamTabProps) {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'owner' | 'barber' | 'admin'>('barber');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Credenciais geradas para envio fácil via WhatsApp
@@ -147,10 +150,20 @@ export function TeamTab({ organization }: TeamTabProps) {
           full_name: fullName.trim(),
           email: email.trim() || undefined,
           phone: phone.trim() || undefined,
+          password: password.trim() || undefined,
           role,
           avatar_url: avatarUrl.trim() || undefined,
         }, organization.id);
         setTeam(prev => prev.map(m => m.id === editingMember.id ? updated : m));
+
+        if (password.trim() && email.trim()) {
+          setJustCreatedCreds({
+            name: fullName.trim(),
+            email: email.trim(),
+            phone: phone.trim() || undefined,
+            password: password.trim(),
+          });
+        }
       } else {
         const created = await DataService.createTeamMember({
           organization_id: organization.id,
@@ -372,16 +385,30 @@ export function TeamTab({ organization }: TeamTabProps) {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-zinc-400 font-medium block mb-1">
-                      {editingMember ? 'Nova Senha (Opcional)' : 'Senha Inicial'}
+                    <label className="text-[11px] text-zinc-400 font-medium flex items-center justify-between mb-1">
+                      <span>{editingMember ? 'Nova Senha (Opcional)' : 'Senha Inicial'}</span>
+                      {password.trim().length >= 6 && (
+                        <span className="text-[10px] text-emerald-400 font-semibold">Pronta para salvar</span>
+                      )}
                     </label>
-                    <input 
-                      type="password" 
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder={editingMember ? 'Deixe vazio p/ manter' : 'Mínimo 6 dígitos'}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
-                    />
+                    <div className="relative">
+                      <input 
+                        type={showPassword ? 'text' : 'password'} 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={editingMember ? 'Digite p/ definir nova senha' : 'Mínimo 6 dígitos'}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-3 pr-8 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        tabIndex={-1}
+                        className="absolute right-2.5 top-2 text-zinc-500 hover:text-zinc-300 p-0.5 transition-colors"
+                        title={showPassword ? "Ocultar senha" : "Ver senha"}
+                      >
+                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

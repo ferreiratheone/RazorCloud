@@ -598,6 +598,10 @@ export const DataService = {
             active: barber.active ?? true,
           };
 
+          if ((barber as any).auth_user_id) {
+            payload.auth_user_id = (barber as any).auth_user_id;
+          }
+
           if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(barberId)) {
             payload.id = barberId;
           }
@@ -662,6 +666,17 @@ export const DataService = {
 
         if (authError) {
           console.warn('Aviso ao criar credencial no Supabase Auth:', authError);
+          // Se o usuário já existia no auth, tentar atualizar a senha via RPC
+          if (authError.message?.toLowerCase().includes('already registered')) {
+            try {
+              await supabase.rpc('set_barber_password', {
+                target_user_id: barberData.id,
+                new_password: password.trim(),
+              });
+            } catch (rpcErr) {
+              console.warn('RPC set_barber_password fallback:', rpcErr);
+            }
+          }
         } else if (authResult?.user) {
           barberData.id = authResult.user.id;
           (barberData as any).auth_user_id = authResult.user.id;
@@ -674,10 +689,59 @@ export const DataService = {
     return this.saveBarber(barberData);
   },
 
-  async updateTeamMember(id: string, updates: Partial<UserProfile>, orgId: string): Promise<UserProfile> {
+  async updateTeamMember(
+    id: string, 
+    updates: Partial<UserProfile> & { password?: string }, 
+    orgId: string
+  ): Promise<UserProfile> {
+    const { password, ...barberUpdates } = updates;
     const list = await this.getTeam(orgId);
     const existing = list.find(b => b.id === id);
-    const merged = { ...existing, ...updates, id, organization_id: orgId };
+    const merged: any = { ...existing, ...barberUpdates, id, organization_id: orgId };
+
+    // Se o dono forneceu uma nova senha ao editar o barbeiro
+    if (password && merged.email && isSupabaseConfigured()) {
+      try {
+        let updatedViaRpc = false;
+        try {
+          const { data: rpcRes, error: rpcErr } = await supabase.rpc('set_barber_password', {
+            target_user_id: id,
+            new_password: password.trim(),
+          });
+          if (!rpcErr && rpcRes?.success && !rpcRes?.needs_signup) {
+            updatedViaRpc = true;
+          }
+        } catch (rpcErr) {
+          // RPC pode não estar criada ainda no banco
+        }
+
+        // Se não foi atualizado via RPC (ou usuário ainda não estava no auth.users), cria a conta isolada
+        if (!updatedViaRpc) {
+          const isolated = createIsolatedClient();
+          const { data: authResult, error: authError } = await isolated.auth.signUp({
+            email: merged.email.trim(),
+            password: password.trim(),
+            options: {
+              data: {
+                full_name: merged.full_name || 'Barbeiro',
+                role: merged.role || 'barber',
+                phone: merged.phone || '',
+                organization_id: orgId,
+              },
+            },
+          });
+
+          if (authResult?.user) {
+            merged.auth_user_id = authResult.user.id;
+          } else if (authError) {
+            console.warn('Aviso ao registrar/atualizar senha no Auth:', authError.message);
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao processar credenciais ao atualizar barbeiro:', err);
+      }
+    }
+
     return this.saveBarber(merged);
   },
 

@@ -8,7 +8,9 @@ import {
   X, 
   ShieldCheck, 
   MessageCircle,
-  Instagram
+  Instagram,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase/client';
 import { DataService } from '@/src/lib/data-service';
@@ -24,6 +26,7 @@ interface AuthModalProps {
 export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: AuthModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -93,8 +96,10 @@ export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: Au
     } catch (err: any) {
       console.error('Erro no login:', err);
       const msg = err?.message?.toLowerCase() || '';
-      if (msg.includes('invalid login credentials') || msg.includes('invalid_grant')) {
-        setErrorMsg('E-mail ou senha incorretos. Acesso exclusivo para contas autorizadas.');
+      if (msg.includes('email not confirmed')) {
+        setErrorMsg('E-mail ainda não confirmado no Supabase. É necessário desmarcar a opção "Confirm email" no painel do Supabase (Authentication -> Providers -> Email) para login imediato.');
+      } else if (msg.includes('invalid login credentials') || msg.includes('invalid_grant')) {
+        setErrorMsg('E-mail ou senha incorretos. Verifique os dados digitados.');
       } else {
         setErrorMsg(err?.message || 'Ocorreu um erro ao realizar o login.');
       }
@@ -166,13 +171,22 @@ export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: Au
             <div className="relative">
               <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
               <input 
-                type="password" 
+                type={showPassword ? 'text' : 'password'} 
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                placeholder="Digite sua senha"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+                className="absolute right-3 top-2.5 text-zinc-500 hover:text-zinc-300 p-0.5 transition-colors"
+                title={showPassword ? "Ocultar senha" : "Ver senha"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
