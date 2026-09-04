@@ -13,13 +13,15 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 import { DataService } from '@/src/lib/data-service';
-import type { Organization, FinancialMetrics } from '@/src/types/database';
+import type { Organization, FinancialMetrics, UserProfile } from '@/src/types/database';
 
 interface FinancialTabProps {
   organization: Organization;
+  currentUser?: UserProfile;
 }
 
-export function FinancialTab({ organization }: FinancialTabProps) {
+export function FinancialTab({ organization, currentUser }: FinancialTabProps) {
+  const isOwner = !currentUser || currentUser.role === 'owner' || currentUser.role === 'admin';
   const [period, setPeriod] = useState<'today' | '7days' | 'month' | 'all'>('month');
   const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,7 +29,11 @@ export function FinancialTab({ organization }: FinancialTabProps) {
   async function loadMetrics() {
     setLoading(true);
     try {
-      const data = await DataService.getFinancialMetrics(organization.id, period);
+      const data = await DataService.getFinancialMetrics(
+        organization.id, 
+        period, 
+        !isOwner && currentUser ? currentUser.id : undefined
+      );
       setMetrics(data);
     } catch (e) {
       console.error('Erro ao calcular métricas financeiras:', e);
@@ -38,7 +44,7 @@ export function FinancialTab({ organization }: FinancialTabProps) {
 
   useEffect(() => {
     loadMetrics();
-  }, [organization.id, period]);
+  }, [organization.id, period, currentUser?.id]);
 
   const maxDailyRevenue = metrics?.dailyRevenue?.length 
     ? Math.max(...metrics.dailyRevenue.map(d => d.revenue), 100) 
@@ -51,10 +57,13 @@ export function FinancialTab({ organization }: FinancialTabProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-emerald-400" /> Relatório Financeiro & Métricas
+            <TrendingUp className="w-5 h-5 text-emerald-400" />
+            {isOwner ? 'Relatório Financeiro & Métricas' : 'Meu Financeiro & Atendimentos'}
           </h2>
           <p className="text-xs text-zinc-400">
-            Acompanhe o faturamento, ticket médio, produtos vendidos e performance da equipe.
+            {isOwner 
+              ? 'Acompanhe o faturamento, ticket médio, produtos vendidos e performance da equipe.'
+              : 'Acompanhe seus atendimentos concluídos, faturamento pessoal e produtos vendidos.'}
           </p>
         </div>
 
@@ -304,7 +313,8 @@ export function FinancialTab({ organization }: FinancialTabProps) {
             <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 space-y-3 md:col-span-2 lg:col-span-1">
               <div className="flex items-center justify-between pb-2 border-b border-zinc-800/60">
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-blue-400" /> Produção por Barbeiro
+                  <User className="w-3.5 h-3.5 text-blue-400" />
+                  {isOwner ? 'Produção por Barbeiro' : 'Meu Desempenho Individual'}
                 </h4>
                 <span className="text-[10px] text-zinc-500">Cortes</span>
               </div>

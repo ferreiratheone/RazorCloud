@@ -20,14 +20,16 @@ import {
   Scissors
 } from 'lucide-react';
 import { DataService } from '@/src/lib/data-service';
-import type { Organization, MembershipPlan, CustomerSubscription } from '@/src/types/database';
+import type { Organization, MembershipPlan, CustomerSubscription, UserProfile } from '@/src/types/database';
 
 interface PlansTabProps {
   organization: Organization;
   onUpdateOrg: (org: Organization) => void;
+  currentUser?: UserProfile;
 }
 
-export function PlansTab({ organization, onUpdateOrg }: PlansTabProps) {
+export function PlansTab({ organization, onUpdateOrg, currentUser }: PlansTabProps) {
+  const isOwner = !currentUser || currentUser.role === 'owner' || currentUser.role === 'admin';
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
   const [subscriptions, setSubscriptions] = useState<CustomerSubscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -252,23 +254,32 @@ export function PlansTab({ organization, onUpdateOrg }: PlansTabProps) {
           </p>
         </div>
 
-        {/* Chave Liga/Desliga */}
-        <div className="flex items-center gap-3 bg-zinc-900/70 border border-zinc-800 px-4 py-2.5 rounded-2xl">
-          <span className="text-xs font-medium text-zinc-300">
-            {isPlansEnabled ? 'Clube de Planos Ativo' : 'Clube Desativado'}
-          </span>
-          <button
-            onClick={handleTogglePlansEnabled}
-            disabled={isTogglingPlans}
-            className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 disabled:opacity-50 disabled:cursor-not-allowed ${
-              isPlansEnabled ? 'bg-amber-500' : 'bg-zinc-700'
-            }`}
-          >
-            <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
-              isPlansEnabled ? 'translate-x-5' : 'translate-x-0'
-            }`} />
-          </button>
-        </div>
+        {/* Chave Liga/Desliga ou Status */}
+        {isOwner ? (
+          <div className="flex items-center gap-3 bg-zinc-900/70 border border-zinc-800 px-4 py-2.5 rounded-2xl">
+            <span className="text-xs font-medium text-zinc-300">
+              {isPlansEnabled ? 'Clube de Planos Ativo' : 'Clube Desativado'}
+            </span>
+            <button
+              onClick={handleTogglePlansEnabled}
+              disabled={isTogglingPlans}
+              className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 disabled:opacity-50 disabled:cursor-not-allowed ${
+                isPlansEnabled ? 'bg-amber-500' : 'bg-zinc-700'
+              }`}
+            >
+              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                isPlansEnabled ? 'translate-x-5' : 'translate-x-0'
+              }`} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 bg-zinc-900/70 border border-zinc-800 px-3.5 py-2 rounded-2xl">
+            <Crown className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-semibold text-emerald-400">
+              {isPlansEnabled ? 'Clube Ativo no Salão' : 'Clube Desativado'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Cards de Métricas do Clube VIP */}

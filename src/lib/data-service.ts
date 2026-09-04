@@ -1505,8 +1505,8 @@ export const DataService = {
   },
 
   // --- RELATÓRIOS E MÉTRICAS FINANCEIRAS ---
-  async getFinancialMetrics(orgId: string, period: 'today' | '7days' | 'month' | 'all'): Promise<FinancialMetrics> {
-    const allAppointments = await this.getAppointments(orgId);
+  async getFinancialMetrics(orgId: string, period: 'today' | '7days' | 'month' | 'all', barberId?: string): Promise<FinancialMetrics> {
+    const allAppointments = await this.getAppointments(orgId, undefined, barberId);
     const services = await this.getServices(orgId);
     const team = await this.getTeam(orgId);
 

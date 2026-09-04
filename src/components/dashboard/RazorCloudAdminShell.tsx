@@ -72,6 +72,8 @@ export default function RazorCloudAdminShell({
     { id: 'settings' as const, label: 'Configurações do Site', icon: Settings },
   ] : [
     { id: 'agenda' as const, label: 'Minha Agenda', icon: CalendarDays },
+    { id: 'financial' as const, label: 'Meu Financeiro', icon: TrendingUp },
+    { id: 'plans' as const, label: 'Clube de Assinaturas', icon: Crown },
     { id: 'hours' as const, label: 'Meus Horários de Trabalho', icon: Clock },
     { id: 'services' as const, label: 'Serviços da Barbearia', icon: Scissors },
     { id: 'products' as const, label: 'Produtos & Vitrine', icon: ShoppingBag },
@@ -97,7 +99,7 @@ export default function RazorCloudAdminShell({
           />
         );
       case 'financial':
-        return isOwner ? <FinancialTab organization={organization} /> : null;
+        return <FinancialTab organization={organization} currentUser={currentUser} />;
       case 'services':
         return <ServicesTab organization={organization} />;
       case 'products':
@@ -105,7 +107,7 @@ export default function RazorCloudAdminShell({
       case 'clients':
         return isOwner ? <ClientsTab organization={organization} /> : null;
       case 'plans':
-        return isOwner ? <PlansTab organization={organization} onUpdateOrg={onUpdateOrg} /> : null;
+        return <PlansTab organization={organization} onUpdateOrg={onUpdateOrg} currentUser={currentUser} />;
       case 'team':
         return isOwner ? <TeamTab organization={organization} /> : null;
       case 'hours':
