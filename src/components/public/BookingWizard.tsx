@@ -20,10 +20,14 @@ import {
   Plus,
   Minus,
   Check,
-  Users
+  Users,
+  Flame,
+  Tag,
+  X
 } from 'lucide-react';
 import { DataService, getLocalDateString } from '@/src/lib/data-service';
-import type { Organization, Service, UserProfile, TimeSlot, CustomerSubscription, Product } from '@/src/types/database';
+import type { Organization, Service, UserProfile, TimeSlot, CustomerSubscription, Product, AppointmentAdditionalService } from '@/src/types/database';
+import { APP_SERVICE_CATEGORIES, getNormalizedCategory, getCategoryBadge } from '@/src/lib/categories';
 
 interface BookingWizardProps {
   slug?: string;
@@ -35,6 +39,16 @@ const variants = {
   exit: (direction: number) => ({ zIndex: 0, x: direction < 0 ? 25 : -25, opacity: 0 })
 };
 
+const WIZARD_CATEGORIES = [
+  { id: 'all', label: 'Todos os Serviços', icon: '💈' },
+  { id: 'Cabelo', label: 'Cabelo', icon: '✂️' },
+  { id: 'Barba', label: 'Barba', icon: '🪒' },
+  { id: 'Sobrancelha', label: 'Sobrancelha', icon: '✨' },
+  { id: 'Coloração', label: 'Coloração', icon: '🎨' },
+  { id: 'Combos', label: 'Combos & Promo', icon: '🔥' },
+  { id: 'Outros', label: 'Outros Serviços', icon: '💈' }
+];
+
 export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: BookingWizardProps) {
   // Estado do Estabelecimento & Dados
   const [loading, setLoading] = useState(true);
@@ -43,12 +57,15 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   const [professionals, setProfessionals] = useState<UserProfile[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
 
-  // Fluxo em Etapas (1: Serviço, 2: Profissional [se múltiplos], 3: Horário, 4: Confirmar)
+  // Fluxo em Etapas (1: Serviços [Multi-Seleção], 2: Profissional [se múltiplos], 3: Horário, 4: Confirmar)
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
   
-  // Escolhas do Cliente
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  // Categoria ativa na Etapa 1
+  const [wizardCategory, setWizardCategory] = useState<string>('all');
+
+  // Escolhas do Cliente (Múltiplos Serviços: Corte + Barba + Sobrancelha, etc.)
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<string | null>(null);
   const [selectedDateIndex, setSelectedDateIndex] = useState<number>(0);
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
@@ -204,12 +221,24 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
     return () => clearTimeout(timer);
   }, [clientPhone, tenant]);
 
-  // Carregar slots de horário disponíveis
+  // Lista dos serviços selecionados
+  const selectedServicesList = useMemo(() => {
+    return services.filter(s => selectedServiceIds.includes(s.id));
+  }, [services, selectedServiceIds]);
+
+  // Primeiro serviço (serviço principal da tabela)
+  const primaryService = selectedServicesList[0] || null;
+
+  // Duração total somando todos os serviços selecionados
+  const totalServicesDuration = useMemo(() => {
+    if (selectedServicesList.length === 0) return 30;
+    return selectedServicesList.reduce((acc, s) => acc + (Number(s.duration) || 30), 0);
+  }, [selectedServicesList]);
+
+  // Carregar slots de horário disponíveis considerando a DURAÇÃO TOTAL de todos os serviços
   useEffect(() => {
     async function fetchSlots() {
-      if (!tenant || !selectedServiceId) return;
-      const service = services.find(s => s.id === selectedServiceId);
-      if (!service) return;
+      if (!tenant || selectedServicesList.length === 0) return;
 
       setLoadingSlots(true);
       try {
@@ -217,7 +246,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         const slots = await DataService.getAvailableSlots({
           orgId: tenant.id,
           barberId: selectedProfessionalId === 'any' ? undefined : (selectedProfessionalId || undefined),
-          serviceDuration: service.duration,
+          serviceDuration: totalServicesDuration,
           targetDate,
         });
         setAvailableSlots(slots);
@@ -229,9 +258,8 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
     }
 
     fetchSlots();
-  }, [tenant?.id, selectedServiceId, selectedProfessionalId, selectedDateIndex]);
+  }, [tenant?.id, selectedServicesList.length, totalServicesDuration, selectedProfessionalId, selectedDateIndex]);
 
-  const selectedService = services.find(s => s.id === selectedServiceId);
   const selectedProfessional = professionals.find(p => p.id === selectedProfessionalId);
 
   // Lista de produtos selecionados
@@ -248,8 +276,36 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
     return selectedProductsList.reduce((acc, item) => acc + (Number(item.product.price) * item.quantity), 0);
   }, [selectedProductsList]);
 
-  const baseServicePrice = (activeSubscription && isSubBooking) ? 0 : Number(selectedService?.price || 0);
-  const finalTotalPrice = baseServicePrice + productsTotal;
+  // Preço base dos serviços selecionados considerando promoções e plano VIP
+  const baseServicesPrice = useMemo(() => {
+    if (selectedServicesList.length === 0) return 0;
+    return selectedServicesList.reduce((acc, s, index) => {
+      // Se cliente VIP com corte incluso, o primeiro corte/serviço sai gratuito
+      if (activeSubscription && isSubBooking && index === 0) {
+        return acc;
+      }
+      const price = (s.is_promotional && s.promotional_price) 
+        ? Number(s.promotional_price) 
+        : Number(s.price);
+      return acc + price;
+    }, 0);
+  }, [selectedServicesList, activeSubscription, isSubBooking]);
+
+  // Serviços filtrados por categoria utilizando normalização inteligente
+  const filteredServices = useMemo(() => {
+    if (wizardCategory === 'all') return services;
+    return services.filter(s => getNormalizedCategory(s) === wizardCategory);
+  }, [services, wizardCategory]);
+
+  const finalTotalPrice = baseServicesPrice + productsTotal;
+
+  function toggleServiceSelection(srvId: string) {
+    setSelectedServiceIds(prev => 
+      prev.includes(srvId) 
+        ? prev.filter(id => id !== srvId) 
+        : [...prev, srvId]
+    );
+  }
 
   function toggleProductQuantity(prodId: string, delta: number) {
     setSelectedProductQuantities(prev => {
@@ -271,7 +327,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
 
   const getStepTitle = () => {
     switch (step) {
-      case 1: return "Escolha o Serviço";
+      case 1: return "Escolha seus Serviços";
       case 2: return "Escolha o Profissional";
       case 3: return "Data e Horário";
       case 4: return "Confirmar Agendamento";
@@ -280,7 +336,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   };
 
   const handleConfirm = async () => {
-    if (!tenant || !selectedService || !selectedSlot || !clientName.trim() || !clientPhone.trim()) {
+    if (!tenant || !primaryService || !selectedSlot || !clientName.trim() || !clientPhone.trim()) {
       if (!selectedSlot) {
         setErrorMessage('Por favor, volte e selecione um horário de atendimento.');
       } else if (!clientName.trim()) {
@@ -311,11 +367,19 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
       }
 
       const startTime = new Date(selectedSlot.isoString);
-      const endTime = new Date(startTime.getTime() + selectedService.duration * 60 * 1000);
+      const endTime = new Date(startTime.getTime() + totalServicesDuration * 60 * 1000);
 
-      const createdAppointment = await DataService.createAppointment({
+      // Serviços adicionais além do principal
+      const additionalServices: AppointmentAdditionalService[] = selectedServicesList.slice(1).map(s => ({
+        id: s.id,
+        name: s.name,
+        price: (s.is_promotional && s.promotional_price) ? Number(s.promotional_price) : Number(s.price),
+        duration: s.duration || 30
+      }));
+
+      await DataService.createAppointment({
         organization_id: tenant.id,
-        service_id: selectedService.id,
+        service_id: primaryService.id,
         user_id: barberId,
         client_name: clientName.trim(),
         client_phone: clientPhone.trim(),
@@ -331,6 +395,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
           quantity: p.quantity,
         })),
         products_total: productsTotal,
+        additional_services: additionalServices.length > 0 ? additionalServices : undefined,
       });
 
       // Debitar 1 corte do plano do assinante se aplicável
@@ -341,12 +406,13 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
       // Disparar WhatsApp Automático se habilitado na barbearia
       if (tenant.whatsapp_auto_enabled) {
         const cleanPhone = clientPhone.replace(/\D/g, '');
+        const servicesText = selectedServicesList.map(s => s.name).join(' + ');
         const autoMsg = (tenant.whatsapp_msg_confirmation || 'Fala {cliente}! Seu agendamento foi confirmado para {data} às {horario} na {barbearia}. Te esperamos! ✂️')
           .replace('{cliente}', clientName.trim())
           .replace('{horario}', selectedSlot.time)
           .replace('{data}', dateOptions[selectedDateIndex].date)
           .replace('{barbearia}', tenant.name)
-          .replace('{servico}', selectedService.name)
+          .replace('{servico}', servicesText)
           .replace('{valor}', `R$ ${finalTotalPrice.toFixed(2)}`);
 
         DataService.sendAutomatedWhatsAppMessage({
@@ -392,16 +458,17 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   if (isSuccess) {
     const barberName = selectedProfessional?.full_name || 'Profissional';
     const cleanPhone = (tenant.phone || '').replace(/\D/g, '');
+    const servicesText = selectedServicesList.map(s => s.name).join(' + ');
     
     const productsText = selectedProductsList.length > 0
       ? `\n🛍️ *Produtos Adicionais:*\n` + selectedProductsList.map(p => `• ${p.quantity}x ${p.product.name} (R$ ${(p.product.price * p.quantity).toFixed(2)})`).join('\n')
       : '';
 
-    const priceText = activeSubscription && isSubBooking && productsTotal === 0
+    const priceText = activeSubscription && isSubBooking && productsTotal === 0 && selectedServicesList.length === 1
       ? 'R$ 0,00 (Incluso no Plano VIP)'
       : `R$ ${finalTotalPrice.toFixed(2)}`;
 
-    const whatsappText = `💈 *Novo Agendamento Confirmado!*\n\n✂️ *Serviço:* ${selectedService?.name}\n💰 *Valor:* ${priceText}${productsText}\n📅 *Data:* ${dateOptions[selectedDateIndex]?.date} às ${selectedSlot?.time}\n👤 *Cliente:* ${clientName}\n📱 *WhatsApp:* ${clientPhone}\n💈 *Profissional:* ${barberName}\n\nAgendamento realizado pelo site oficial da ${tenant.name}!`;
+    const whatsappText = `💈 *Novo Agendamento Confirmado!*\n\n✂️ *Serviço(s):* ${servicesText} (${totalServicesDuration} min)\n💰 *Valor:* ${priceText}${productsText}\n📅 *Data:* ${dateOptions[selectedDateIndex]?.date} às ${selectedSlot?.time}\n👤 *Cliente:* ${clientName}\n📱 *WhatsApp:* ${clientPhone}\n💈 *Profissional:* ${barberName}\n\nAgendamento realizado pelo site oficial da ${tenant.name}!`;
     
     const whatsappUrl = cleanPhone
       ? `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(whatsappText)}`
@@ -423,9 +490,35 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
 
           {/* Cartão do Comprovante */}
           <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 text-left text-xs space-y-3 shadow-xl backdrop-blur-md">
+            <div>
+              <span className="text-zinc-500 block mb-1.5 font-semibold uppercase text-[10px] tracking-wider">
+                Serviço(s) Contratado(s):
+              </span>
+              <div className="space-y-1.5 border-b border-zinc-800/80 pb-2.5">
+                {selectedServicesList.map((s, idx) => {
+                  const isPromo = s.is_promotional && s.promotional_price;
+                  const price = isPromo ? Number(s.promotional_price) : Number(s.price);
+                  return (
+                    <div key={s.id} className="flex justify-between items-center text-zinc-200">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        <strong className="text-white">{s.name}</strong>
+                        <span className="text-[10px] text-zinc-500">({s.duration} min)</span>
+                      </span>
+                      <span className="font-semibold text-emerald-400">
+                        {activeSubscription && isSubBooking && idx === 0 ? 'R$ 0,00 (VIP)' : `R$ ${price.toFixed(2)}`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="flex justify-between border-b border-zinc-800/80 pb-2.5">
-              <span className="text-zinc-500">Serviço:</span>
-              <span className="font-bold text-white">{selectedService?.name}</span>
+              <span className="text-zinc-500">Tempo Total Estimado:</span>
+              <span className="font-bold text-white flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-zinc-400" /> {totalServicesDuration} minutos
+              </span>
             </div>
 
             {selectedProductsList.length > 0 && (
@@ -473,7 +566,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
               onClick={() => {
                 setIsSuccess(false);
                 setStep(1);
-                setSelectedServiceId(null);
+                setSelectedServiceIds([]);
                 setSelectedProfessionalId(null);
                 setSelectedSlot(null);
                 setSelectedProductQuantities({});
@@ -502,57 +595,202 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
     );
   }
 
-  // --- ETAPA 1: ESCOLHA DO SERVIÇO ---
+  // --- ETAPA 1: ESCOLHA DO SERVIÇO (MULTI-SELEÇÃO & CATEGORIAS) ---
   const renderStep1 = () => (
-    <div className="space-y-3 w-full">
-      {services.length === 0 ? (
-        <div className="text-center py-8 text-zinc-500 text-xs">
-          Nenhum serviço disponível no momento.
-        </div>
-      ) : (
-        services.map((srv) => {
-          const isSelected = selectedServiceId === srv.id;
+    <div className="space-y-4 w-full">
+      {/* Barra de Filtro de Categorias */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none max-w-full -mx-1 px-1">
+        {WIZARD_CATEGORIES.map(cat => {
+          const isCatActive = wizardCategory === cat.id;
+          const countSelectedInCat = services.filter(s => 
+            selectedServiceIds.includes(s.id) && (cat.id === 'all' || getNormalizedCategory(s) === cat.id)
+          ).length;
+
           return (
             <button
-              key={srv.id}
-              onClick={() => {
-                setSelectedServiceId(srv.id);
-                setDirection(1);
-                if (isSingleBarber) {
-                  setSelectedProfessionalId(professionals[0]?.id || 'any');
-                  setStep(3); // Pula direto para o horário
-                } else {
-                  setStep(2);
-                }
-              }}
-              className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between group
-                ${isSelected 
-                  ? 'bg-zinc-800/90 border-zinc-400 shadow-md ring-1 ring-white/20' 
-                  : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/60 hover:border-zinc-700'
-                }`}
+              key={cat.id}
+              type="button"
+              onClick={() => setWizardCategory(cat.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 border shrink-0 ${
+                isCatActive
+                  ? 'bg-white text-zinc-950 border-white shadow-sm'
+                  : 'bg-zinc-900/70 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white'
+              }`}
             >
-              <div className="space-y-1">
-                <h3 className="font-bold text-sm text-white group-hover:text-zinc-100">{srv.name}</h3>
-                {srv.description && (
-                  <p className="text-xs text-zinc-400 line-clamp-1">{srv.description}</p>
-                )}
-                <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
-                  <Clock className="w-3 h-3" />
-                  <span>{srv.duration} min</span>
-                </div>
-              </div>
-
-              <div className="text-right shrink-0 ml-3">
-                <span className="font-bold text-sm text-emerald-400 block">
-                  R$ {Number(srv.price).toFixed(2)}
+              <span>{cat.icon}</span>
+              <span>{cat.label}</span>
+              {countSelectedInCat > 0 && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                  isCatActive ? 'bg-zinc-900 text-white' : 'bg-emerald-500 text-zinc-950'
+                }`}>
+                  {countSelectedInCat}
                 </span>
-                <span className="text-[10px] text-zinc-400 font-semibold group-hover:text-white">
-                  Escolher →
-                </span>
-              </div>
+              )}
             </button>
           );
-        })
+        })}
+      </div>
+
+      {/* Dica de Multi-Seleção */}
+      <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-xl px-3 py-2 text-[11px] text-zinc-400 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <span>Selecione 1 ou mais serviços para o mesmo atendimento</span>
+        </span>
+        {selectedServicesList.length > 0 && (
+          <span className="font-bold text-emerald-400 shrink-0">
+            {selectedServicesList.length} marcado(s)
+          </span>
+        )}
+      </div>
+
+      {/* Bandeja de Serviços Já Marcados (Visual Rápido) */}
+      {selectedServicesList.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <span className="text-[10px] text-zinc-500 font-bold uppercase shrink-0">Selecionados:</span>
+          {selectedServicesList.map(s => (
+            <span 
+              key={s.id}
+              onClick={() => toggleServiceSelection(s.id)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-[11px] font-semibold cursor-pointer hover:bg-emerald-500/20 transition-all shrink-0"
+              title="Clique para remover"
+            >
+              {s.name}
+              <X className="w-3 h-3 text-emerald-400" />
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Lista de Serviços */}
+      <div className="space-y-2.5 w-full">
+        {filteredServices.length === 0 ? (
+          <div className="text-center py-10 border border-dashed border-zinc-800 rounded-2xl p-6 text-zinc-500 text-xs">
+            <Scissors className="w-6 h-6 mx-auto mb-2 text-zinc-600" />
+            Nenhum serviço encontrado nesta categoria.
+          </div>
+        ) : (
+          filteredServices.map((srv) => {
+            const isSelected = selectedServiceIds.includes(srv.id);
+            const isPromo = srv.is_promotional && srv.promotional_price;
+            const finalPrice = isPromo ? Number(srv.promotional_price) : Number(srv.price);
+
+            return (
+              <div
+                key={srv.id}
+                onClick={() => toggleServiceSelection(srv.id)}
+                className={`w-full text-left p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between group cursor-pointer select-none
+                  ${isSelected 
+                    ? 'bg-zinc-800/90 border-emerald-500/70 shadow-lg ring-1 ring-emerald-500/30' 
+                    : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/60 hover:border-zinc-700'
+                  }`}
+              >
+                {/* Lado Esquerdo: Checkbox & Infos do Serviço */}
+                <div className="flex items-start gap-3 min-w-0 pr-2">
+                  {/* Checkbox estilizado */}
+                  <div className={`w-5 h-5 rounded-lg border mt-0.5 flex items-center justify-center shrink-0 transition-all ${
+                    isSelected 
+                      ? 'bg-emerald-500 border-emerald-400 text-zinc-950 font-bold shadow-sm' 
+                      : 'bg-zinc-950/60 border-zinc-700 text-transparent group-hover:border-zinc-500'
+                  }`}>
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] bg-zinc-800 text-zinc-300 border border-zinc-700/60 px-2 py-0.5 rounded-md font-medium flex items-center gap-1">
+                        <span>{getCategoryBadge(getNormalizedCategory(srv)).icon}</span>
+                        <span>{getCategoryBadge(getNormalizedCategory(srv)).label.split('&')[0].trim()}</span>
+                      </span>
+                      {isPromo && (
+                        <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1">
+                          <Flame className="w-2.5 h-2.5 text-amber-400" /> Promoção
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="font-bold text-xs sm:text-sm text-white group-hover:text-zinc-100 truncate">
+                      {srv.name}
+                    </h3>
+                    
+                    {srv.description && (
+                      <p className="text-[11px] text-zinc-400 line-clamp-1">{srv.description}</p>
+                    )}
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+                      <Clock className="w-3 h-3 text-zinc-500" />
+                      <span>{srv.duration} min</span>
+                      {isPromo && srv.promo_days && (
+                        <>
+                          <span className="text-zinc-600">•</span>
+                          <span className="text-[10px] text-amber-400 font-semibold">{srv.promo_days}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Lado Direito: Valores */}
+                <div className="text-right shrink-0">
+                  {isPromo ? (
+                    <div>
+                      <span className="text-[11px] text-zinc-500 line-through block">
+                        R$ {Number(srv.price).toFixed(2)}
+                      </span>
+                      <span className="font-extrabold text-sm sm:text-base text-amber-400 block">
+                        R$ {finalPrice.toFixed(2)}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-extrabold text-sm sm:text-base text-emerald-400 block">
+                      R$ {Number(srv.price).toFixed(2)}
+                    </span>
+                  )}
+                  
+                  <span className={`text-[10px] font-semibold mt-0.5 inline-block ${
+                    isSelected ? 'text-emerald-400' : 'text-zinc-500 group-hover:text-zinc-300'
+                  }`}>
+                    {isSelected ? '✓ Adicionado' : '+ Adicionar'}
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Barra Fixa Flutuante de Checkout quando há serviços selecionados */}
+      {selectedServicesList.length > 0 ? (
+        <div className="sticky bottom-0 -mx-4 -mb-4 sm:-mx-6 sm:-mb-6 p-4 bg-zinc-900/95 backdrop-blur-xl border-t border-zinc-800 flex items-center justify-between z-20 rounded-b-3xl shadow-2xl mt-4">
+          <div>
+            <p className="text-[11px] text-zinc-400 font-medium">
+              {selectedServicesList.length} {selectedServicesList.length === 1 ? 'serviço' : 'serviços'} • {totalServicesDuration} min
+            </p>
+            <p className="text-base font-extrabold text-emerald-400">
+              R$ {baseServicesPrice.toFixed(2)}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setDirection(1);
+              if (isSingleBarber) {
+                setSelectedProfessionalId(professionals[0]?.id || 'any');
+                setStep(3); // Pula direto para o horário
+              } else {
+                setStep(2);
+              }
+            }}
+            className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold px-5 py-3 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+          >
+            Avançar <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="text-center py-2 text-[11px] text-zinc-500">
+          Selecione ao menos um serviço para prosseguir com o agendamento.
+        </div>
       )}
     </div>
   );
@@ -664,6 +902,17 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         </div>
       )}
 
+      {/* Resumo rápido dos serviços selecionados */}
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-2.5 flex items-center justify-between text-xs">
+        <span className="text-zinc-400">
+          {selectedServicesList.length} serviço(s) selecionado(s):
+        </span>
+        <span className="font-bold text-white flex items-center gap-1">
+          <Clock className="w-3 h-3 text-emerald-400" />
+          {totalServicesDuration} minutos reservados
+        </span>
+      </div>
+
       {/* Seletor Horizontal de Dias */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full scrollbar-none">
         {dateOptions.map((opt, idx) => (
@@ -693,7 +942,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         {loadingSlots ? (
           <div className="py-10 text-center flex flex-col items-center justify-center text-zinc-500">
             <Loader2 className="w-5 h-5 animate-spin text-zinc-400 mb-2" />
-            <p className="text-xs">Buscando horários livres...</p>
+            <p className="text-xs">Buscando horários com vaga de {totalServicesDuration} min...</p>
           </div>
         ) : availableSlots.length === 0 || availableSlots.filter(s => s.available).length === 0 ? (
           <div className="py-8 text-center border border-dashed border-zinc-800 rounded-2xl p-5 bg-zinc-950/40 space-y-3">
@@ -787,7 +1036,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
               ✨ Saldo restante: {Math.max(0, activeSubscription.cuts_total - activeSubscription.cuts_used)} corte(s)
             </span>
             <span className="text-xs font-bold text-amber-400">
-              Corte: R$ 0,00 (Incluso)
+              Corte Principal: R$ 0,00 (Incluso)
             </span>
           </div>
         </div>
@@ -873,14 +1122,52 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         </div>
       )}
 
-      {/* Resumo do Horário e Valores */}
-      <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl p-4 text-xs space-y-2">
-        <div className="flex justify-between border-b border-zinc-800/60 pb-2">
-          <span className="text-zinc-500">Serviço:</span>
-          <span className="font-bold text-white">{selectedService?.name || 'Serviço'}</span>
+      {/* Resumo do Horário e Valores com Todos os Serviços */}
+      <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl p-4 text-xs space-y-2.5">
+        <div>
+          <span className="text-zinc-500 block mb-1 font-semibold text-[10px] uppercase tracking-wider">
+            Serviço(s) Contratado(s) ({selectedServicesList.length}):
+          </span>
+          <div className="space-y-1.5 border-b border-zinc-800/60 pb-2.5">
+            {selectedServicesList.map((srv, idx) => {
+              const isPromo = srv.is_promotional && srv.promotional_price;
+              const price = isPromo ? Number(srv.promotional_price) : Number(srv.price);
+              const isVipFree = activeSubscription && isSubBooking && idx === 0;
+
+              return (
+                <div key={srv.id} className="flex items-center justify-between text-zinc-300">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                    <span className="font-bold text-white truncate">{srv.name}</span>
+                    <span className="text-[10px] text-zinc-500">({srv.duration}m)</span>
+                    {isPromo && (
+                      <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-bold">
+                        PROMO
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-semibold text-zinc-200 shrink-0 ml-2">
+                    {isVipFree ? (
+                      <span className="text-amber-400">R$ 0,00 (VIP)</span>
+                    ) : (
+                      `R$ ${price.toFixed(2)}`
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
+
+        <div className="flex justify-between border-b border-zinc-800/60 pb-2 text-zinc-400">
+          <span className="flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5 text-zinc-500" /> Duração total estimada:
+          </span>
+          <span className="font-bold text-white">{totalServicesDuration} min</span>
+        </div>
+
         <div className="flex justify-between border-b border-zinc-800/60 pb-2">
-          <span className="text-zinc-500">Horário:</span>
+          <span className="text-zinc-500">Data e Horário:</span>
           <span className="font-bold text-emerald-400">
             {dateOptions[selectedDateIndex]?.date} às {selectedSlot?.time || '--:--'}
           </span>
@@ -896,9 +1183,9 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         )}
 
         <div className="flex justify-between pt-1">
-          <span className="text-zinc-500">Valor Total:</span>
-          <span className="font-bold text-white text-sm">
-            {activeSubscription && isSubBooking && productsTotal === 0 ? (
+          <span className="text-zinc-400 font-bold">Valor Total:</span>
+          <span className="font-extrabold text-emerald-400 text-sm">
+            {activeSubscription && isSubBooking && productsTotal === 0 && selectedServicesList.length === 1 ? (
               <span className="text-amber-400 font-bold">R$ 0,00 (Plano VIP)</span>
             ) : (
               `R$ ${finalTotalPrice.toFixed(2)}`
@@ -973,7 +1260,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   );
 
   return (
-    <div className="min-h-screen bg-zinc-950 font-sans text-zinc-50 flex flex-col items-center justify-between selection:bg-zinc-800 selection:text-white pb-6">
+    <div className="min-h-screen bg-zinc-950 font-sans text-zinc-50 flex flex-col items-center justify-between selection:bg-zinc-800 selection:text-white pb-12">
       
       {/* Header White-Label da Barbearia */}
       <header className="w-full max-w-xl px-6 pt-10 pb-6 flex flex-col items-center justify-center text-center">
@@ -1002,12 +1289,12 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         )}
       </header>
 
-      {/* Container Principal do Wizard */}
+      {/* Container Principal do Wizard (sem overflow-hidden restritivo para permitir scroll natural fluido) */}
       <main className="w-full max-w-md px-4 flex-1 flex flex-col justify-start">
-        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-6 sm:p-7 backdrop-blur-xl relative overflow-hidden shadow-2xl flex flex-col">
+        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-5 sm:p-7 backdrop-blur-xl relative shadow-2xl flex flex-col">
           
           {/* Header de Progresso Dinâmico */}
-          <div className="flex items-center justify-between mb-6 shrink-0">
+          <div className="flex items-center justify-between mb-5 shrink-0">
             <div>
               <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-0.5">
                 Passo {currentDisplayStep} de {totalDisplaySteps}
@@ -1052,7 +1339,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
       </main>
 
       {/* Footer com Créditos do Desenvolvedor */}
-      <footer className="w-full text-center pt-6 pb-2 text-[11px] text-zinc-500 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+      <footer className="w-full text-center pt-8 pb-4 text-[11px] text-zinc-500 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
         <span>© {tenant.name}</span>
         <span className="text-zinc-700">•</span>
         <span className="flex items-center gap-1 text-zinc-400">

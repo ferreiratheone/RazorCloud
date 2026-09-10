@@ -52,6 +52,14 @@ export function ClientsTab({ organization }: ClientsTabProps) {
     appointments.forEach((apt) => {
       const key = (apt.client_phone || apt.client_name).toLowerCase().trim();
       const srvName = typeof apt.service === 'object' && apt.service?.name ? apt.service.name : 'Atendimento';
+      const allSrvNames = [srvName];
+      if (Array.isArray(apt.additional_services)) {
+        apt.additional_services.forEach(as => {
+          if (as?.name && !allSrvNames.includes(as.name)) {
+            allSrvNames.push(as.name);
+          }
+        });
+      }
 
       if (!map.has(key)) {
         map.set(key, {
@@ -59,7 +67,7 @@ export function ClientsTab({ organization }: ClientsTabProps) {
           phone: apt.client_phone || '',
           totalAppointments: 1,
           lastVisit: apt.start_time,
-          services: [srvName],
+          services: [...allSrvNames],
         });
       } else {
         const existing = map.get(key)!;
@@ -67,9 +75,11 @@ export function ClientsTab({ organization }: ClientsTabProps) {
         if (new Date(apt.start_time) > new Date(existing.lastVisit)) {
           existing.lastVisit = apt.start_time;
         }
-        if (!existing.services.includes(srvName)) {
-          existing.services.push(srvName);
-        }
+        allSrvNames.forEach(sn => {
+          if (!existing.services.includes(sn)) {
+            existing.services.push(sn);
+          }
+        });
       }
     });
 

@@ -42,6 +42,10 @@ export interface Service {
   price: number;
   duration: number; // in minutes
   active: boolean;
+  category?: string; // "Cabelo", "Barba", "Sobrancelha & Opcionais", "Coloração", "Promoções & Combos", etc.
+  is_promotional?: boolean;
+  promotional_price?: number; // Preço promocional com desconto
+  promo_days?: string; // Ex: "Segunda a Quarta-feira"
   created_at?: string;
   updated_at?: string;
 }
@@ -66,6 +70,13 @@ export interface AppointmentProductItem {
   name: string;
   price: number;
   quantity: number;
+}
+
+export interface AppointmentAdditionalService {
+  id: string;
+  name: string;
+  price: number;
+  duration: number;
 }
 
 export interface Schedule {
@@ -99,6 +110,7 @@ export interface Appointment {
   is_subscription?: boolean;
   products?: AppointmentProductItem[];
   products_total?: number;
+  additional_services?: AppointmentAdditionalService[];
   created_at?: string;
   updated_at?: string;
   // Joins

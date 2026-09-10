@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Mail, 
   Lock, 
@@ -10,7 +10,9 @@ import {
   MessageCircle,
   Instagram,
   Eye,
-  EyeOff
+  EyeOff,
+  KeyRound,
+  Check
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase/client';
 import { DataService } from '@/src/lib/data-service';
@@ -23,14 +25,105 @@ interface AuthModalProps {
   isFullPage?: boolean;
 }
 
+const STORAGE_KEY = 'razorcloud_saved_auth';
+
 export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: AuthModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(true);
+  const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Modal / Prompt de confirmação para salvar a senha
+  const [showSavePrompt, setShowSavePrompt] = useState(false);
+  const [pendingAuth, setPendingAuth] = useState<{ user: UserProfile; org: Organization } | null>(null);
+
+  // Carregar credenciais salvas no dispositivo ao carregar
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.email && parsed?.password) {
+            setEmail(parsed.email);
+            setPassword(parsed.password);
+            setHasSavedCredentials(true);
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao ler credenciais salvas:', e);
+      }
+    }
+  }, []);
+
   if (!isOpen) return null;
+
+  function handleForgetCredentials() {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {}
+    }
+    setEmail('');
+    setPassword('');
+    setHasSavedCredentials(false);
+  }
+
+  function handleConfirmSavePassword() {
+    if (typeof window !== 'undefined' && pendingAuth) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          email: email.trim(),
+          password,
+          savedAt: new Date().toISOString(),
+        }));
+      } catch (e) {}
+    }
+    setShowSavePrompt(false);
+    if (pendingAuth) {
+      onSuccess(pendingAuth.user, pendingAuth.org);
+      if (onClose) onClose();
+    }
+  }
+
+  function handleDismissSavePassword() {
+    setShowSavePrompt(false);
+    if (pendingAuth) {
+      onSuccess(pendingAuth.user, pendingAuth.org);
+      if (onClose) onClose();
+    }
+  }
+
+  function finishLogin(user: UserProfile, org: Organization) {
+    let alreadySaved = false;
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.email === email.trim() && parsed?.password === password) {
+            alreadySaved = true;
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (alreadySaved) {
+      // Se a senha já estava salva e inalterada, entra direto sem perguntar de novo
+      onSuccess(user, org);
+      if (onClose) onClose();
+    } else if (rememberDevice) {
+      // Abre o diálogo perguntando se deseja salvar a senha neste dispositivo
+      setPendingAuth({ user, org });
+      setShowSavePrompt(true);
+    } else {
+      onSuccess(user, org);
+      if (onClose) onClose();
+    }
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -53,8 +146,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: Au
           const { user, organization } = await DataService.getCurrentUserProfile();
           
           if (user && organization) {
-            onSuccess(user, organization);
-            if (onClose) onClose();
+            finishLogin(user, organization);
             return;
           }
 
@@ -71,8 +163,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: Au
             role: 'owner',
             active: true,
           };
-          onSuccess(fallbackUser, fallbackOrg);
-          if (onClose) onClose();
+          finishLogin(fallbackUser, fallbackOrg);
           return;
         }
       } else {
@@ -90,8 +181,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: Au
           name: 'Ferreira Barber',
           slug: 'ferreirabarber',
         };
-        onSuccess(user, org);
-        if (onClose) onClose();
+        finishLogin(user, org);
       }
     } catch (err: any) {
       console.error('Erro no login:', err);
@@ -114,9 +204,57 @@ export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: Au
 
   return (
     <div className={containerClasses}>
-      <div className="bg-zinc-900/95 border border-zinc-800 rounded-3xl max-w-sm w-full p-6 sm:p-8 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 my-auto">
+      <div className="bg-zinc-900/95 border border-zinc-800 rounded-3xl max-w-sm w-full p-6 sm:p-8 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 my-auto overflow-hidden">
         
-        {/* Botão Fechar (apenas se for modal) */}
+        {/* MODAL SOBREPOSTO: DESEJA SALVAR SUA SENHA? */}
+        {showSavePrompt && pendingAuth && (
+          <div className="absolute inset-0 bg-zinc-950/98 backdrop-blur-md rounded-3xl p-6 sm:p-8 flex flex-col justify-between z-30 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center my-auto space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
+                <KeyRound className="w-7 h-7" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Deseja salvar sua senha?</h3>
+                <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                  Ao salvar sua senha neste aparelho, você e os barbeiros entram direto no painel sem precisar digitar tudo novamente.
+                </p>
+              </div>
+
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-left flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
+                  <Mail className="w-4 h-4 text-zinc-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">Conta conectada</p>
+                  <p className="text-xs text-white font-medium truncate">{email.trim()}</p>
+                </div>
+                <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  Pronto
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-4">
+              <button
+                type="button"
+                onClick={handleConfirmSavePassword}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold py-3 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 shadow-sm"
+              >
+                <Check className="w-4 h-4" /> Sim, salvar senha neste dispositivo
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDismissSavePassword}
+                className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white font-medium py-2.5 px-4 rounded-xl text-xs transition-colors"
+              >
+                Agora não
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Botão Fechar (apenas se for modal flutuante) */}
         {!isFullPage && onClose && (
           <button 
             onClick={onClose}
@@ -141,6 +279,23 @@ export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: Au
           </p>
         </div>
 
+        {/* Banner Indicador de Credenciais Salvas */}
+        {hasSavedCredentials && (
+          <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2 text-xs text-emerald-400 mb-4">
+            <span className="flex items-center gap-1.5 font-medium">
+              <KeyRound className="w-3.5 h-3.5 shrink-0" /> Senha salva neste dispositivo
+            </span>
+            <button
+              type="button"
+              onClick={handleForgetCredentials}
+              className="text-[11px] text-zinc-400 hover:text-white underline transition-colors shrink-0 ml-2"
+              title="Apagar dados salvos deste aparelho"
+            >
+              Trocar de conta
+            </button>
+          </div>
+        )}
+
         {/* Mensagem de Erro */}
         {errorMsg && (
           <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex items-center gap-2 mb-4">
@@ -149,17 +304,22 @@ export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: Au
           </div>
         )}
 
-        {/* Formulário de Login Seguro */}
-        <form onSubmit={handleLogin} className="space-y-3.5">
+        {/* Formulário de Login Seguro com AutoComplete nativo */}
+        <form onSubmit={handleLogin} autoComplete="on" className="space-y-3.5">
           <div>
             <label className="text-xs text-zinc-400 font-semibold block mb-1">E-mail Cadastrado</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
               <input 
+                name="email"
                 type="email" 
                 required
+                autoComplete="username"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (hasSavedCredentials) setHasSavedCredentials(false);
+                }}
                 placeholder="seuemail@barbearia.com"
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
               />
@@ -171,10 +331,15 @@ export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: Au
             <div className="relative">
               <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
               <input 
+                name="password"
                 type={showPassword ? 'text' : 'password'} 
                 required
+                autoComplete="current-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (hasSavedCredentials) setHasSavedCredentials(false);
+                }}
                 placeholder="Digite sua senha"
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
               />
@@ -190,13 +355,28 @@ export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: Au
             </div>
           </div>
 
+          {/* Opção de Lembrar Senha */}
+          <div className="flex items-center justify-between text-xs pt-0.5">
+            <label className="flex items-center gap-2 text-zinc-400 hover:text-zinc-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={rememberDevice}
+                onChange={(e) => setRememberDevice(e.target.checked)}
+                className="w-3.5 h-3.5 rounded bg-zinc-950 border-zinc-800 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-emerald-500"
+              />
+              <span>Lembrar meus dados de acesso</span>
+            </label>
+          </div>
+
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-white text-zinc-950 hover:bg-zinc-200 font-bold py-3 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 mt-4"
+            className="w-full bg-white text-zinc-950 hover:bg-zinc-200 font-bold py-3 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 mt-3"
           >
             {loading ? (
               <><Loader2 className="w-4 h-4 animate-spin" /> Acessando...</>
+            ) : hasSavedCredentials ? (
+              <>Entrar com Senha Salva <ArrowRight className="w-4 h-4" /></>
             ) : (
               <>Entrar no Painel <ArrowRight className="w-4 h-4" /></>
             )}

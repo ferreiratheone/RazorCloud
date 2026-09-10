@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured, createIsolatedClient } from './supabase/client';
+import { getNormalizedCategory } from './categories';
 import type { 
   Organization, 
   UserProfile, 
@@ -71,33 +72,43 @@ export const DataService = {
           const fullName = meta.full_name || 'Proprietário';
           const baseSlug = userSavedOrg?.slug || (shopName.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'barbearia') + '-' + authUserId.substring(0, 4);
 
-          // 1. Buscar perfil do usuário no Supabase (por id direto ou e-mail cadastrado pelo dono)
+          // 1. Buscar perfil do usuário no Supabase (por auth_user_id oficial, id ou e-mail)
           let userProfile: any = null;
-          const { data: profileById } = await supabase
+          const { data: profileByAuth } = await supabase
             .from('users')
             .select('*')
-            .eq('id', authUserId)
+            .eq('auth_user_id', authUserId)
             .maybeSingle();
 
-          if (profileById) {
-            userProfile = profileById;
-          } else if (userEmail) {
-            const { data: profileByEmail } = await supabase
+          if (profileByAuth) {
+            userProfile = profileByAuth;
+          } else {
+            const { data: profileById } = await supabase
               .from('users')
               .select('*')
-              .eq('email', userEmail)
+              .eq('id', authUserId)
               .maybeSingle();
 
-            if (profileByEmail) {
-              userProfile = profileByEmail;
-              try {
-                await supabase
-                  .from('users')
-                  .update({ auth_user_id: authUserId })
-                  .eq('id', profileByEmail.id);
-                userProfile.auth_user_id = authUserId;
-              } catch (linkErr) {
-                console.warn('Vínculo auth_user_id:', linkErr);
+            if (profileById) {
+              userProfile = profileById;
+            } else if (userEmail) {
+              const { data: profileByEmail } = await supabase
+                .from('users')
+                .select('*')
+                .ilike('email', userEmail.trim())
+                .maybeSingle();
+
+              if (profileByEmail) {
+                userProfile = profileByEmail;
+                try {
+                  await supabase
+                    .from('users')
+                    .update({ auth_user_id: authUserId })
+                    .eq('id', profileByEmail.id);
+                  userProfile.auth_user_id = authUserId;
+                } catch (linkErr) {
+                  console.warn('Vínculo auth_user_id:', linkErr);
+                }
               }
             }
           }
@@ -290,6 +301,12 @@ export const DataService = {
 
   // --- SERVIÇOS DO CATÁLOGO ---
   async getServices(orgId: string): Promise<Service[]> {
+    const localList = getLocalData<Service[]>('services_' + orgId, []);
+    const localMap = new Map<string, Partial<Service>>();
+    localList.forEach(ls => {
+      if (ls && ls.id) localMap.set(ls.id, ls);
+    });
+
     if (isSupabaseConfigured()) {
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
@@ -300,9 +317,27 @@ export const DataService = {
             .eq('organization_id', orgId)
             .order('name', { ascending: true });
 
-          if (!error && Array.isArray(data) && data.length > 0) {
-            setLocalData('services_' + orgId, data);
-            return data as Service[];
+          if (!error && Array.isArray(data)) {
+            const enriched: Service[] = data.map((srv: any) => {
+              const local = localMap.get(srv.id);
+              const category = srv.category || local?.category || getNormalizedCategory(srv);
+              const is_promotional = Boolean(srv.is_promotional ?? local?.is_promotional ?? false);
+              const promotional_price = srv.promotional_price !== undefined && srv.promotional_price !== null && srv.promotional_price !== ''
+                ? Number(srv.promotional_price)
+                : (local?.promotional_price !== undefined && local?.promotional_price !== null ? Number(local.promotional_price) : null);
+              const promo_days = srv.promo_days || local?.promo_days || null;
+
+              return {
+                ...srv,
+                category,
+                is_promotional,
+                promotional_price,
+                promo_days,
+              };
+            });
+
+            setLocalData('services_' + orgId, enriched);
+            return enriched;
           }
         }
       } catch (e) {
@@ -310,14 +345,30 @@ export const DataService = {
       }
     }
 
-    return getLocalData<Service[]>('services_' + orgId, []);
+    // Normalizar também a lista local garantindo que todo serviço tenha sua categoria correta
+    const normalizedLocal = localList.map(s => ({
+      ...s,
+      category: s.category || getNormalizedCategory(s)
+    }));
+
+    return normalizedLocal;
   },
 
   async saveService(service: Omit<Service, 'id'> & { id?: string }): Promise<Service> {
     const isEditing = Boolean(service.id);
     const serviceId = service.id || 'srv-' + Date.now();
+    const finalCategory = service.category || getNormalizedCategory(service);
+
+    const parsedPromoPrice = service.promotional_price !== undefined && service.promotional_price !== null && String(service.promotional_price).trim() !== ''
+      ? Number(service.promotional_price)
+      : null;
+
     const finalService: Service = {
       ...service,
+      category: finalCategory,
+      is_promotional: Boolean(service.is_promotional),
+      promotional_price: parsedPromoPrice,
+      promo_days: service.promo_days || null,
       id: serviceId,
       created_at: new Date().toISOString(),
     } as Service;
@@ -333,24 +384,50 @@ export const DataService = {
             price: Number(service.price) || 0,
             duration: Number(service.duration) || 30,
             active: service.active ?? true,
+            category: finalCategory,
+            is_promotional: Boolean(service.is_promotional),
+            promotional_price: parsedPromoPrice,
+            promo_days: service.promo_days || null,
           };
 
           if (isEditing && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(serviceId)) {
             payload.id = serviceId;
           }
 
-          const { data, error } = await supabase
+          let { data, error } = await supabase
             .from('services')
             .upsert([payload])
             .select()
             .single();
 
+          if (error && (error.message?.includes('category') || error.message?.includes('promotional') || error.message?.includes('promo_days'))) {
+            delete payload.category;
+            delete payload.is_promotional;
+            delete payload.promotional_price;
+            delete payload.promo_days;
+            const retry = await supabase
+              .from('services')
+              .upsert([payload])
+              .select()
+              .single();
+            data = retry.data;
+            error = retry.error;
+          }
+
           if (data && !error) {
-            const list = await this.getServices(service.organization_id);
-            const filtered = list.filter(s => s.id !== data.id);
-            const updated = [data as Service, ...filtered];
+            const savedItem: Service = {
+              ...(data as Service),
+              category: finalCategory,
+              is_promotional: Boolean(service.is_promotional),
+              promotional_price: parsedPromoPrice,
+              promo_days: service.promo_days || null,
+            };
+
+            const currentLocal = getLocalData<Service[]>('services_' + service.organization_id, []);
+            const filtered = currentLocal.filter(s => s.id !== data.id && s.id !== serviceId);
+            const updated = [savedItem, ...filtered];
             setLocalData('services_' + service.organization_id, updated);
-            return data as Service;
+            return savedItem;
           }
         }
       } catch (e) {
@@ -358,8 +435,8 @@ export const DataService = {
       }
     }
 
-    const list = await this.getServices(service.organization_id);
-    const filtered = list.filter(s => s.id !== serviceId);
+    const currentLocal = getLocalData<Service[]>('services_' + service.organization_id, []);
+    const filtered = currentLocal.filter(s => s.id !== serviceId);
     const updated = [finalService, ...filtered];
     setLocalData('services_' + service.organization_id, updated);
     return finalService;
@@ -402,7 +479,7 @@ export const DataService = {
             .eq('organization_id', orgId)
             .order('name', { ascending: true });
 
-          if (!error && Array.isArray(data) && data.length > 0) {
+          if (!error && Array.isArray(data)) {
             setLocalData('products_' + orgId, data);
             return data as Product[];
           }
@@ -956,6 +1033,7 @@ export const DataService = {
           is_subscription: Boolean(appointment.is_subscription),
           products: appointment.products || null,
           products_total: Number(appointment.products_total) || 0,
+          additional_services: appointment.additional_services || null,
         };
 
         const isOrgUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.organization_id);
@@ -1026,10 +1104,11 @@ export const DataService = {
             .select('*, service:services(*), barber:users(*)')
             .single();
 
-          if (error && (error.message?.includes('products') || error.message?.includes('is_subscription'))) {
+          if (error && (error.message?.includes('products') || error.message?.includes('is_subscription') || error.message?.includes('additional_services'))) {
             delete payload.products;
             delete payload.products_total;
             delete payload.is_subscription;
+            delete payload.additional_services;
             const retry = await supabase
               .from('appointments')
               .insert([payload])
@@ -1043,8 +1122,33 @@ export const DataService = {
             const list = getLocalData<Appointment[]>('appointments_' + appointment.organization_id, []);
             setLocalData('appointments_' + appointment.organization_id, [data, ...list]);
             return data as Appointment;
-          } else {
-            console.error('Erro detalhado ao gravar agendamento no Supabase:', error);
+          }
+
+          // Fallback resiliente: se a gravação com .select() falhou (ex: política RLS não permite SELECT a anon),
+          // realizamos um insert puro no Supabase com UUID explícito para salvar o agendamento no banco
+          if (error) {
+            delete payload.products;
+            delete payload.products_total;
+            delete payload.is_subscription;
+            delete payload.additional_services;
+            const fallbackId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined;
+            if (fallbackId) payload.id = fallbackId;
+
+            const pureInsert = await supabase
+              .from('appointments')
+              .insert([payload]);
+
+            if (!pureInsert.error) {
+              const savedApt: Appointment = {
+                ...newApt,
+                id: payload.id || newApt.id,
+              };
+              const list = getLocalData<Appointment[]>('appointments_' + appointment.organization_id, []);
+              setLocalData('appointments_' + appointment.organization_id, [savedApt, ...list]);
+              return savedApt;
+            } else {
+              console.error('Erro detalhado ao gravar agendamento no Supabase:', error, pureInsert.error);
+            }
           }
         }
       } catch (e) {
@@ -1114,7 +1218,7 @@ export const DataService = {
             .eq('organization_id', orgId)
             .order('price', { ascending: true });
 
-          if (!error && Array.isArray(data) && data.length > 0) {
+          if (!error && Array.isArray(data)) {
             setLocalData('plans_' + orgId, data);
             return data as MembershipPlan[];
           }
@@ -1465,43 +1569,11 @@ export const DataService = {
     phone: string;
     message: string;
   }): Promise<{ success: boolean; error?: string }> {
-    const { org, phone, message } = params;
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (!cleanPhone) return { success: false, error: 'Telefone inválido' };
-
-    if (org.whatsapp_auto_enabled && org.whatsapp_api_instance && org.whatsapp_api_token) {
-      try {
-        const formattedPhone = cleanPhone.length === 10 || cleanPhone.length === 11 
-          ? `55${cleanPhone}` 
-          : cleanPhone;
-
-        const baseUrl = org.whatsapp_api_url || `https://api.z-api.io/instances/${org.whatsapp_api_instance}/token/${org.whatsapp_api_token}/send-text`;
-        
-        const response = await fetch(baseUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(org.whatsapp_api_token ? { 'Client-Token': org.whatsapp_api_token } : {})
-          },
-          body: JSON.stringify({
-            phone: formattedPhone,
-            message: message
-          })
-        });
-
-        if (response.ok) {
-          return { success: true };
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          return { success: false, error: errData?.message || 'Erro na resposta da API WhatsApp' };
-        }
-      } catch (e: any) {
-        console.warn('Erro ao disparar mensagem WhatsApp via API:', e);
-        return { success: false, error: e?.message || 'Falha de conexão com a API' };
-      }
-    }
-
-    return { success: false, error: 'Automação WhatsApp não configurada ou inativa.' };
+    // Módulo de automação de WhatsApp via API paga configurado em manutenção
+    return { 
+      success: false, 
+      error: 'Automação de WhatsApp via gateway pago está temporariamente em manutenção.' 
+    };
   },
 
   // --- RELATÓRIOS E MÉTRICAS FINANCEIRAS ---

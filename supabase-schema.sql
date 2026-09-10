@@ -34,6 +34,17 @@ CREATE TABLE IF NOT EXISTS public.organizations (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Compatibilidade caso a tabela organizations já existisse sem as novas colunas
+ALTER TABLE IF EXISTS public.organizations ADD COLUMN IF NOT EXISTS plans_enabled BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE IF EXISTS public.organizations ADD COLUMN IF NOT EXISTS products_enabled BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE IF EXISTS public.organizations ADD COLUMN IF NOT EXISTS whatsapp_auto_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE IF EXISTS public.organizations ADD COLUMN IF NOT EXISTS whatsapp_api_url TEXT;
+ALTER TABLE IF EXISTS public.organizations ADD COLUMN IF NOT EXISTS whatsapp_api_instance TEXT;
+ALTER TABLE IF EXISTS public.organizations ADD COLUMN IF NOT EXISTS whatsapp_api_token TEXT;
+ALTER TABLE IF EXISTS public.organizations ADD COLUMN IF NOT EXISTS whatsapp_reminder_hours INT NOT NULL DEFAULT 2;
+ALTER TABLE IF EXISTS public.organizations ADD COLUMN IF NOT EXISTS whatsapp_msg_confirmation TEXT;
+ALTER TABLE IF EXISTS public.organizations ADD COLUMN IF NOT EXISTS whatsapp_msg_reminder TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_organizations_slug ON public.organizations (slug);
 
 -- B. TABELA USERS (Donos, Administradores e Barbeiros)
@@ -75,6 +86,12 @@ CREATE TABLE IF NOT EXISTS public.services (
 );
 
 CREATE INDEX IF NOT EXISTS idx_services_org ON public.services (organization_id);
+
+-- Compatibilidade caso a tabela services já existisse sem as colunas de categorias e promoções
+ALTER TABLE IF EXISTS public.services ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'Cabelo';
+ALTER TABLE IF EXISTS public.services ADD COLUMN IF NOT EXISTS is_promotional BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE IF EXISTS public.services ADD COLUMN IF NOT EXISTS promotional_price NUMERIC(10,2);
+ALTER TABLE IF EXISTS public.services ADD COLUMN IF NOT EXISTS promo_days TEXT;
 
 -- D. TABELA PRODUCTS (Vitrine de Produtos & Estoque da Barbearia)
 CREATE TABLE IF NOT EXISTS public.products (
@@ -139,6 +156,12 @@ CREATE TABLE IF NOT EXISTS public.appointments (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_end_after_start CHECK (end_time > start_time)
 );
+
+-- Compatibilidade caso a tabela appointments já existisse sem as colunas de planos e produtos
+ALTER TABLE IF EXISTS public.appointments ADD COLUMN IF NOT EXISTS is_subscription BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE IF EXISTS public.appointments ADD COLUMN IF NOT EXISTS products JSONB;
+ALTER TABLE IF EXISTS public.appointments ADD COLUMN IF NOT EXISTS products_total NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE IF EXISTS public.appointments ADD COLUMN IF NOT EXISTS additional_services JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_appointments_org_date ON public.appointments (organization_id, start_time);
 CREATE INDEX IF NOT EXISTS idx_appointments_barber ON public.appointments (user_id, start_time);
@@ -257,6 +280,9 @@ CREATE POLICY "Public Read Schedules" ON public.schedules
 
 CREATE POLICY "Public Read Active Plans" ON public.membership_plans
   FOR SELECT TO anon, authenticated USING (active = true);
+
+CREATE POLICY "Public Read Appointments" ON public.appointments
+  FOR SELECT TO anon, authenticated USING (true);
 
 CREATE POLICY "Public Create Appointment" ON public.appointments
   FOR INSERT TO anon, authenticated WITH CHECK (true);
