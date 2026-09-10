@@ -167,25 +167,20 @@ export const DataService = {
       }
     }
 
-    // Modo Local / Demonstração
-    const localUser = getLocalData<UserProfile | null>('current_user', {
-      id: 'user-owner',
-      organization_id: 'org-main',
-      full_name: 'Proprietário da Barbearia',
-      role: 'owner',
-      email: 'proprietario@barbearia.com',
-      active: true,
-    });
+    // Se o Supabase estiver configurado e não houver usuário autenticado, ninguém entra sem login
+    if (isSupabaseConfigured()) {
+      return { user: null, organization: null };
+    }
 
-    const localOrg = getLocalData<Organization | null>('current_org', {
-      id: 'org-main',
-      name: 'Ferreira Barber',
-      slug: 'ferreirabarber',
-      plans_enabled: true,
-      products_enabled: true,
-    });
+    // Modo Local apenas se Supabase não estiver configurado E o usuário tiver efetuado login prévio
+    const localUser = getLocalData<UserProfile | null>('current_user', null);
+    const localOrg = getLocalData<Organization | null>('current_org', null);
 
-    return { user: localUser, organization: localOrg };
+    if (localUser && localOrg) {
+      return { user: localUser, organization: localOrg };
+    }
+
+    return { user: null, organization: null };
   },
 
   // --- ORGANIZAÇÕES (BARBEARIAS) ---
