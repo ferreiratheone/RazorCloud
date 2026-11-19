@@ -1,6 +1,6 @@
 {
-  "name": "RazorCloud",
-  "description": "Mini-SaaS B2B multi-tenant para agendamentos de barbearias com vitrine pública e painel administrativo.",
+  "name": "Fratres Barbearia",
+  "description": "Sistema oficial de agendamentos e gestão da Fratres Barbearia.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

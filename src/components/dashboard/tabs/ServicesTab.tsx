@@ -12,7 +12,8 @@ import {
   Flame,
   Calendar,
   Sparkles,
-  Filter
+  Filter,
+  X
 } from 'lucide-react';
 import { DataService } from '@/src/lib/data-service';
 import type { Organization, Service } from '@/src/types/database';
@@ -348,14 +349,25 @@ export function ServicesTab({ organization }: ServicesTabProps) {
         </div>
       )}
 
-      {/* Modal Criar / Editar Serviço com Promoção e Categoria */}
+      {/* Modal Criar / Editar Serviço com Promoção e Categoria (Bottom Sheet no Mobile) */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 sm:p-7 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Scissors className="w-5 h-5 text-emerald-400" />
-              {editingService ? 'Editar Serviço / Combo' : 'Novo Serviço / Combo'}
-            </h3>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-7 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-zinc-700 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+            
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <Scissors className="w-5 h-5 text-emerald-400" />
+                {editingService ? 'Editar Serviço / Combo' : 'Novo Serviço / Combo'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Nome */}
@@ -367,7 +379,7 @@ export function ServicesTab({ organization }: ServicesTabProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ex: Corte Degradê, Barboterapia, Combo Especial..."
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
                 />
               </div>
 
@@ -377,7 +389,7 @@ export function ServicesTab({ organization }: ServicesTabProps) {
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-600"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white focus:outline-none focus:border-zinc-500"
                 >
                   {SERVICE_CATEGORIES.map(cat => (
                     <option key={cat.id} value={cat.id}>
@@ -395,12 +407,12 @@ export function ServicesTab({ organization }: ServicesTabProps) {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Ex: Lavagem com shampoo refrescante, toalha quente e finalização com pomada."
                   rows={2}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 resize-none"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-base sm:text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500 resize-none"
                 />
               </div>
 
               {/* Preço e Duração */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-zinc-400 font-medium block mb-1">Preço Normal (R$) *</label>
                   <input 
@@ -411,7 +423,8 @@ export function ServicesTab({ organization }: ServicesTabProps) {
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="39.99"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-600"
+                    inputMode="decimal"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white focus:outline-none focus:border-zinc-500"
                   />
                 </div>
 
@@ -420,7 +433,7 @@ export function ServicesTab({ organization }: ServicesTabProps) {
                   <select 
                     value={duration}
                     onChange={(e) => setDuration(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-600"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white focus:outline-none focus:border-zinc-500"
                   >
                     <option value="15">15 minutos (Rápido / Sobrancelha)</option>
                     <option value="30">30 minutos (Padrão / Corte)</option>
@@ -512,20 +525,20 @@ export function ServicesTab({ organization }: ServicesTabProps) {
               </label>
 
               {/* Botões do Modal */}
-              <div className="flex gap-3 pt-3">
+              <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-3 border-t border-zinc-800/80">
                 <button 
                   type="button" 
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold py-2.5 rounded-xl transition-colors"
+                  className="w-full sm:flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold min-h-[48px] rounded-xl transition-all active:scale-95"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 bg-white text-zinc-950 hover:bg-zinc-200 text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:flex-1 bg-white text-zinc-950 hover:bg-zinc-200 text-sm font-bold min-h-[48px] rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
                 >
-                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Salvar Serviço'}
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Serviço'}
                 </button>
               </div>
             </form>

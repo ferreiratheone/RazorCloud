@@ -531,15 +531,27 @@ export function PlansTab({ organization, onUpdateOrg, currentUser }: PlansTabPro
         )}
       </div>
 
-      {/* Modal Criar / Editar Plano */}
+      {/* Modal Criar / Editar Plano (Bottom Sheet no Mobile) */}
       {isPlanModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 className="text-lg font-bold text-white">
-              {editingPlan ? 'Editar Plano Mensal' : 'Novo Plano de Assinatura'}
-            </h3>
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-zinc-700 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+            
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <Crown className="w-5 h-5 text-amber-400" />
+                {editingPlan ? 'Editar Plano Mensal' : 'Novo Plano de Assinatura'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsPlanModalOpen(false)}
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-            <form onSubmit={handleSavePlan} className="space-y-3.5">
+            <form onSubmit={handleSavePlan} className="space-y-4">
               <div>
                 <label className="text-xs text-zinc-400 font-medium block mb-1">Nome do Plano *</label>
                 <input 
@@ -548,7 +560,7 @@ export function PlansTab({ organization, onUpdateOrg, currentUser }: PlansTabPro
                   value={planName}
                   onChange={(e) => setPlanName(e.target.value)}
                   placeholder="Ex: Plano VIP Gold"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
                 />
               </div>
 
@@ -559,11 +571,11 @@ export function PlansTab({ organization, onUpdateOrg, currentUser }: PlansTabPro
                   onChange={(e) => setPlanDesc(e.target.value)}
                   rows={2}
                   placeholder="Ex: 4 cortes de cabelo por mês + 10% de desconto em pomadas"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 resize-none"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-base sm:text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500 resize-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-zinc-400 font-medium block mb-1">Valor Mensal (R$) *</label>
                   <input 
@@ -573,7 +585,8 @@ export function PlansTab({ organization, onUpdateOrg, currentUser }: PlansTabPro
                     value={planPrice}
                     onChange={(e) => setPlanPrice(e.target.value)}
                     placeholder="120.00"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-600"
+                    inputMode="decimal"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white focus:outline-none focus:border-zinc-500"
                   />
                 </div>
 
@@ -585,25 +598,26 @@ export function PlansTab({ organization, onUpdateOrg, currentUser }: PlansTabPro
                     value={planCuts}
                     onChange={(e) => setPlanCuts(e.target.value)}
                     placeholder="4"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-600"
+                    inputMode="numeric"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white focus:outline-none focus:border-zinc-500"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-3">
+              <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-3 border-t border-zinc-800/80">
                 <button 
                   type="button" 
                   onClick={() => setIsPlanModalOpen(false)}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold py-2.5 rounded-xl transition-colors"
+                  className="w-full sm:flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold min-h-[48px] rounded-xl transition-all active:scale-95"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 bg-white text-zinc-950 hover:bg-zinc-200 text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:flex-1 bg-white text-zinc-950 hover:bg-zinc-200 text-sm font-bold min-h-[48px] rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
                 >
-                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Salvar Plano'}
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Plano'}
                 </button>
               </div>
             </form>
@@ -611,13 +625,27 @@ export function PlansTab({ organization, onUpdateOrg, currentUser }: PlansTabPro
         </div>
       )}
 
-      {/* Modal Cadastrar Assinante */}
+      {/* Modal Cadastrar Assinante (Bottom Sheet no Mobile) */}
       {isSubModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 className="text-lg font-bold text-white">Cadastrar Novo Assinante VIP</h3>
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-zinc-700 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+            
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <Crown className="w-5 h-5 text-amber-400" />
+                Cadastrar Novo Assinante VIP
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsSubModalOpen(false)}
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-            <form onSubmit={handleSaveSub} className="space-y-3.5">
+            <form onSubmit={handleSaveSub} className="space-y-4">
               <div>
                 <label className="text-xs text-zinc-400 font-medium block mb-1">Nome do Cliente *</label>
                 <input 
@@ -626,7 +654,8 @@ export function PlansTab({ organization, onUpdateOrg, currentUser }: PlansTabPro
                   value={subClientName}
                   onChange={(e) => setSubClientName(e.target.value)}
                   placeholder="Ex: Carlos Silva"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                  autoComplete="name"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
                 />
               </div>
 
@@ -638,20 +667,22 @@ export function PlansTab({ organization, onUpdateOrg, currentUser }: PlansTabPro
                   value={subClientPhone}
                   onChange={(e) => setSubClientPhone(e.target.value)}
                   placeholder="(19) 99999-9999"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
                 />
                 <span className="text-[10px] text-zinc-500 mt-1 block">
                   O cliente usará este telefone para ter o desconto automático de assinante na hora de agendar.
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-zinc-400 font-medium block mb-1">Plano Escolhido *</label>
                   <select 
                     value={subPlanId}
                     onChange={(e) => setSubPlanId(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-zinc-600"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-xs text-white focus:outline-none focus:border-zinc-500"
                   >
                     {plans.map(p => (
                       <option key={p.id} value={p.id}>
@@ -668,25 +699,25 @@ export function PlansTab({ organization, onUpdateOrg, currentUser }: PlansTabPro
                     required
                     value={subRenewalDate}
                     onChange={(e) => setSubRenewalDate(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-xs text-white focus:outline-none focus:border-zinc-500"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-3">
+              <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-3 border-t border-zinc-800/80">
                 <button 
                   type="button" 
                   onClick={() => setIsSubModalOpen(false)}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold py-2.5 rounded-xl transition-colors"
+                  className="w-full sm:flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold min-h-[48px] rounded-xl transition-all active:scale-95"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:flex-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-sm font-bold min-h-[48px] rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
                 >
-                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Cadastrar Assinante'}
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Cadastrar Assinante'}
                 </button>
               </div>
             </form>

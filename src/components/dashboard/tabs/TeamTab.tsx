@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Users, 
-  Plus, 
-  Trash2, 
-  Edit3, 
-  Phone, 
-  Mail, 
+import {
+  Users,
+  Plus,
+  Trash2,
+  Edit3,
+  Phone,
+  Mail,
   Loader2,
   Upload,
   Image as ImageIcon,
@@ -13,7 +13,8 @@ import {
   MessageCircle,
   Check,
   Eye,
-  EyeOff
+  EyeOff,
+  X
 } from 'lucide-react';
 import { DataService } from '@/src/lib/data-service';
 import type { Organization, UserProfile } from '@/src/types/database';
@@ -111,6 +112,7 @@ export function TeamTab({ organization }: TeamTabProps) {
     setEmail('');
     setPhone('');
     setPassword('');
+    setShowPassword(false);
     setRole('barber');
     setAvatarUrl('');
     setIsModalOpen(true);
@@ -121,7 +123,8 @@ export function TeamTab({ organization }: TeamTabProps) {
     setFullName(member.full_name);
     setEmail(member.email || '');
     setPhone(member.phone || '');
-    setPassword('');
+    setPassword(member.access_password || '');
+    setShowPassword(false);
     setRole(member.role);
     setAvatarUrl(member.avatar_url || '');
     setIsModalOpen(true);
@@ -211,9 +214,9 @@ export function TeamTab({ organization }: TeamTabProps) {
           <p className="text-xs text-zinc-400">Gerencie os barbeiros e cabeleireiros disponíveis para os clientes escolherem.</p>
         </div>
 
-        <button 
+        <button
           onClick={handleOpenCreate}
-          className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm self-start sm:self-auto"
+          className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 min-h-[48px] rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm self-start sm:self-auto active:scale-95"
         >
           <Plus className="w-4 h-4" /> Adicionar Profissional
         </button>
@@ -233,9 +236,9 @@ export function TeamTab({ organization }: TeamTabProps) {
           <p className="text-xs text-zinc-400 max-w-sm mx-auto mb-5">
             Se você atende sozinho ou tem outros barbeiros na sua equipe, cadastre os nomes para aparecerem na escolha do cliente.
           </p>
-          <button 
+          <button
             onClick={handleOpenCreate}
-            className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 py-2.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-colors shadow-sm"
+            className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 min-h-[48px] rounded-xl text-sm font-bold inline-flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95"
           >
             <Plus className="w-4 h-4" /> Cadastrar Primeiro Profissional
           </button>
@@ -243,16 +246,16 @@ export function TeamTab({ organization }: TeamTabProps) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {team.map((member) => (
-            <div 
+            <div
               key={member.id}
-              className="p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800/80 hover:border-zinc-700 transition-all flex items-start justify-between gap-4"
+              className="p-4 sm:p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800/80 hover:border-zinc-700 transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-4"
             >
-              <div className="flex items-start gap-3.5">
+              <div className="flex items-start gap-3.5 min-w-0">
                 {member.avatar_url ? (
-                  <img 
-                    src={member.avatar_url} 
-                    alt={member.full_name} 
-                    className="w-12 h-12 rounded-xl object-cover border border-zinc-700 aspect-square shrink-0" 
+                  <img
+                    src={member.avatar_url}
+                    alt={member.full_name}
+                    className="w-12 h-12 rounded-xl object-cover border border-zinc-700 aspect-square shrink-0"
                     onError={(e) => (e.currentTarget.style.display = 'none')}
                   />
                 ) : (
@@ -261,52 +264,54 @@ export function TeamTab({ organization }: TeamTabProps) {
                   </div>
                 )}
 
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-sm text-white">{member.full_name}</h3>
-                    <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-medium capitalize">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-sm text-white truncate">{member.full_name}</h3>
+                    <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-medium capitalize shrink-0">
                       {member.role === 'owner' ? 'Proprietário' : 'Barbeiro'}
                     </span>
                   </div>
 
                   {member.phone && (
-                    <p className="text-xs text-zinc-400 flex items-center gap-1 mt-1">
-                      <Phone className="w-3 h-3 text-zinc-500" /> {member.phone}
+                    <p className="text-xs text-zinc-400 flex items-center gap-1 mt-1 font-mono">
+                      <Phone className="w-3 h-3 text-zinc-500 shrink-0" /> {member.phone}
                     </p>
                   )}
 
                   {member.email && (
-                    <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5">
-                      <Mail className="w-3 h-3 text-zinc-600" /> {member.email}
+                    <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5 truncate">
+                      <Mail className="w-3 h-3 text-zinc-600 shrink-0" /> {member.email}
                     </p>
                   )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800/70 w-full sm:w-auto justify-end">
                 {member.phone && (
                   <a
                     href={`https://wa.me/55${member.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                      `Fala ${member.full_name}! 💈✂️\n\nSeu acesso ao painel da barbearia ${organization.name} está liberado:\n\n🔗 Link: ${typeof window !== 'undefined' ? window.location.origin : 'https://razorcloud.vercel.app'}\n📧 Seu E-mail: ${member.email || 'Informe seu e-mail cadastrado'}\n\nAcesse pelo seu celular para ver sua agenda e configurar seus horários de trabalho!`
+                      `Fala ${member.full_name}! 💈✂️\n\nSeu acesso ao painel da ${organization.name} está liberado:\n\n🔗 Link: ${typeof window !== 'undefined' ? `${window.location.origin}/#/admin` : ''}\n📧 Seu E-mail: ${member.email || 'Informe seu e-mail cadastrado'}\n\nAcesse pelo seu celular para ver sua agenda e configurar seus horários de trabalho!`
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-1.5 text-emerald-400 hover:text-emerald-300 rounded-lg hover:bg-emerald-950/40 transition-colors"
+                    className="min-h-[44px] min-w-[44px] px-3 text-emerald-400 hover:text-emerald-300 rounded-xl bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1.5 text-xs font-semibold active:scale-95"
                     title="Enviar dados de acesso via WhatsApp"
                   >
                     <MessageCircle className="w-4 h-4" />
+                    <span className="sm:hidden">WhatsApp</span>
                   </a>
                 )}
-                <button 
+                <button
                   onClick={() => handleOpenEdit(member)}
-                  className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                  className="min-h-[44px] min-w-[44px] px-3 text-zinc-300 hover:text-white rounded-xl bg-zinc-800/60 border border-zinc-700/60 hover:bg-zinc-800 transition-all flex items-center justify-center gap-1.5 text-xs font-semibold active:scale-95"
                   title="Editar"
                 >
                   <Edit3 className="w-4 h-4" />
+                  <span className="sm:hidden">Editar</span>
                 </button>
-                <button 
+                <button
                   onClick={() => handleDelete(member.id)}
-                  className="p-1.5 text-zinc-400 hover:text-red-400 rounded-lg hover:bg-zinc-800 transition-colors"
+                  className="min-h-[44px] min-w-[44px] text-zinc-400 hover:text-red-400 rounded-xl bg-zinc-800/30 border border-zinc-800 hover:bg-red-500/10 hover:border-red-500/20 transition-all flex items-center justify-center active:scale-95"
                   title="Excluir"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -317,34 +322,46 @@ export function TeamTab({ organization }: TeamTabProps) {
         </div>
       )}
 
-      {/* Modal Criar / Editar Membro */}
+      {/* Modal Criar / Editar Membro (Bottom Sheet no Mobile) */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 className="text-lg font-bold text-white">
-              {editingMember ? 'Editar Profissional' : 'Novo Profissional'}
-            </h3>
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-zinc-700 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
 
-            <form onSubmit={handleSubmit} className="space-y-3.5">
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+              <h3 className="text-base sm:text-lg font-bold text-white">
+                {editingMember ? 'Editar Profissional' : 'Novo Profissional'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="text-xs text-zinc-400 font-medium block mb-1">Nome Completo *</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Ex: Matheus Oliveira"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                  placeholder="Ex: Murilo Rodrigues"
+                  autoComplete="name"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-zinc-400 font-medium block mb-1">Cargo / Função</label>
-                  <select 
+                  <select
                     value={role}
                     onChange={(e) => setRole(e.target.value as any)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-zinc-600"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-xs text-white focus:outline-none focus:border-zinc-500"
                   >
                     <option value="owner">Dono / Administrador</option>
                     <option value="barber">Barbeiro / Especialista</option>
@@ -353,62 +370,78 @@ export function TeamTab({ organization }: TeamTabProps) {
 
                 <div>
                   <label className="text-xs text-zinc-400 font-medium block mb-1">Telefone / WhatsApp</label>
-                  <input 
-                    type="tel" 
+                  <input
+                    type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="(11) 99999-9999"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
                   />
                 </div>
               </div>
 
               {/* Seção de Acesso ao Painel do Barbeiro */}
-              <div className="p-3.5 bg-zinc-950/70 border border-zinc-800 rounded-xl space-y-2.5">
-                <div className="flex items-center gap-1.5">
-                  <KeyRound className="w-3.5 h-3.5 text-emerald-400" />
-                  <h4 className="text-xs font-bold text-white">Acesso ao Painel do Barbeiro</h4>
+              <div className="p-3.5 sm:p-4 bg-zinc-950/80 border border-zinc-800 rounded-2xl space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs sm:text-sm font-bold text-white">Acesso ao Painel do Barbeiro</h4>
                 </div>
                 <p className="text-[11px] text-zinc-400 leading-relaxed">
                   Defina um e-mail e senha para o profissional fazer login pelo celular e acessar a própria agenda e horários.
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] text-zinc-400 font-medium block mb-1">E-mail de Login</label>
-                    <input 
-                      type="email" 
+                    <input
+                      type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="barbeiro@email.com"
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                      inputMode="email"
+                      autoComplete="email"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-zinc-400 font-medium flex items-center justify-between mb-1">
-                      <span>{editingMember ? 'Nova Senha (Opcional)' : 'Senha Inicial'}</span>
-                      {password.trim().length >= 6 && (
-                        <span className="text-[10px] text-emerald-400 font-semibold">Pronta para salvar</span>
-                      )}
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] text-zinc-400 font-medium">
+                        {editingMember ? 'Nova Senha (Opcional)' : 'Senha Inicial'}
+                      </label>
+                      {editingMember?.password_changes_count && editingMember.password_changes_count >= 1 ? (
+                        <span className="text-[10px] text-amber-400 font-semibold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20" title="O barbeiro já utilizou a alteração permitida">
+                          Alterada 1x
+                        </span>
+                      ) : password.trim().length >= 6 ? (
+                        <span className="text-[10px] text-emerald-400 font-semibold">Pronta</span>
+                      ) : null}
+                    </div>
                     <div className="relative">
-                      <input 
-                        type={showPassword ? 'text' : 'password'} 
+                      <input
+                        type={showPassword ? 'text' : 'password'}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder={editingMember ? 'Digite p/ definir nova senha' : 'Mínimo 6 dígitos'}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-3 pr-8 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-3.5 pr-12 min-h-[48px] text-base sm:text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500 font-mono tracking-wider"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         tabIndex={-1}
-                        className="absolute right-2.5 top-2 text-zinc-500 hover:text-zinc-300 p-0.5 transition-colors"
-                        title={showPassword ? "Ocultar senha" : "Ver senha"}
+                        className="absolute right-1 top-1 bottom-1 w-11 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+                        title={showPassword ? "Ocultar senha" : "Ver senha atual"}
                       >
-                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        {showPassword ? <EyeOff className="w-5 h-5 text-emerald-400" /> : <Eye className="w-5 h-5" />}
                       </button>
                     </div>
+                    <p className="text-[10px] text-zinc-500 mt-1.5 leading-tight">
+                      {showPassword ? '👁️ Exibindo senha. Clique no olho para ocultar.' : 'Clique no olho para revelar a senha.'}
+                      {editingMember && ' O barbeiro só pode alterar esta senha 1 vez pelo celular. Caso ele esqueça, você pode redefini-la aqui.'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -416,9 +449,9 @@ export function TeamTab({ organization }: TeamTabProps) {
               {/* Upload da Foto do Barbeiro */}
               <div>
                 <label className="text-xs text-zinc-400 font-medium block mb-1.5">Foto do Barbeiro</label>
-                
-                <input 
-                  type="file" 
+
+                <input
+                  type="file"
                   ref={fileInputRef}
                   accept="image/*"
                   onChange={handleFileSelect}
@@ -428,51 +461,51 @@ export function TeamTab({ organization }: TeamTabProps) {
                 <div className="flex items-center gap-3">
                   {avatarUrl ? (
                     <div className="relative group">
-                      <img 
-                        src={avatarUrl} 
-                        alt="Foto do Barbeiro" 
-                        className="w-12 h-12 rounded-xl object-cover border border-zinc-700 shadow-md aspect-square"
+                      <img
+                        src={avatarUrl}
+                        alt="Foto do Barbeiro"
+                        className="w-14 h-14 rounded-2xl object-cover border border-zinc-700 shadow-md aspect-square"
                       />
                       <button
                         type="button"
                         onClick={() => setAvatarUrl('')}
                         title="Remover foto"
-                        className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full p-1 shadow-lg transition-colors"
+                        className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full p-1.5 shadow-lg transition-colors"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ) : (
-                    <div className="w-12 h-12 rounded-xl bg-zinc-950 border border-dashed border-zinc-800 flex items-center justify-center shrink-0">
-                      <ImageIcon className="w-5 h-5 text-zinc-600" />
+                    <div className="w-14 h-14 rounded-2xl bg-zinc-950 border border-dashed border-zinc-800 flex items-center justify-center shrink-0">
+                      <ImageIcon className="w-6 h-6 text-zinc-600" />
                     </div>
                   )}
 
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-colors"
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white px-4 min-h-[48px] rounded-xl text-xs sm:text-sm font-semibold transition-all active:scale-95"
                   >
-                    <Upload className="w-3.5 h-3.5 text-zinc-400" />
+                    <Upload className="w-4 h-4 text-zinc-400" />
                     {avatarUrl ? 'Trocar Foto' : 'Escolher Foto (PC / Celular)'}
                   </button>
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-3">
-                <button 
-                  type="button" 
+              <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-3 border-t border-zinc-800/80">
+                <button
+                  type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold py-2.5 rounded-xl transition-colors"
+                  className="w-full sm:flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold min-h-[48px] rounded-xl transition-all active:scale-95"
                 >
                   Cancelar
                 </button>
-                <button 
+                <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 bg-white text-zinc-950 hover:bg-zinc-200 text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:flex-1 bg-white text-zinc-950 hover:bg-zinc-200 text-sm font-bold min-h-[48px] rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
                 >
-                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Salvar Profissional'}
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Profissional'}
                 </button>
               </div>
             </form>
@@ -480,45 +513,47 @@ export function TeamTab({ organization }: TeamTabProps) {
         </div>
       )}
 
-      {/* Modal de Sucesso com Compartilhamento das Credenciais via WhatsApp */}
+      {/* Modal de Sucesso com Compartilhamento das Credenciais via WhatsApp (Bottom Sheet no Mobile) */}
       {justCreatedCreds && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4 animate-in fade-in zoom-in-95">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto shadow-lg">
-              <Check className="w-6 h-6" />
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-sm w-full p-5 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl text-center space-y-4">
+            <div className="w-12 h-1.5 bg-zinc-700 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto shadow-lg">
+              <Check className="w-7 h-7" />
             </div>
 
             <div>
-              <h3 className="text-base font-bold text-white">Barbeiro Criado com Sucesso!</h3>
+              <h3 className="text-base sm:text-lg font-bold text-white">Barbeiro Criado com Sucesso!</h3>
               <p className="text-xs text-zinc-400 mt-1">
                 A conta de acesso para <strong>{justCreatedCreds.name}</strong> foi registrada no sistema.
               </p>
             </div>
 
-            <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-3.5 text-left text-xs space-y-1.5 font-mono">
+            <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 text-left text-xs space-y-2 font-mono">
               <p className="text-zinc-400">📧 E-mail: <span className="text-white font-sans">{justCreatedCreds.email}</span></p>
               <p className="text-zinc-400">🔑 Senha: <span className="text-emerald-400 font-sans">{justCreatedCreds.password}</span></p>
             </div>
 
-            <div className="space-y-2 pt-1">
+            <div className="space-y-2.5 pt-2">
               {justCreatedCreds.phone && (
                 <a
                   href={`https://wa.me/55${justCreatedCreds.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                    `Fala ${justCreatedCreds.name}! 💈✂️\n\nSeu acesso ao painel da ${organization.name} já foi criado:\n\n🔗 Link: ${typeof window !== 'undefined' ? window.location.origin : 'https://razorcloud.vercel.app'}\n📧 E-mail: ${justCreatedCreds.email}\n🔑 Senha: ${justCreatedCreds.password}\n\nAcesse pelo seu celular para ver sua agenda e configurar seus horários de atendimento!`
+                    `Fala ${justCreatedCreds.name}! 💈✂️\n\nSeu acesso ao painel da ${organization.name} já foi criado:\n\n🔗 Link: ${typeof window !== 'undefined' ? `${window.location.origin}/#/admin` : ''}\n📧 E-mail: ${justCreatedCreds.email}\n🔑 Senha: ${justCreatedCreds.password}\n\nAcesse pelo seu celular para ver sua agenda e configurar seus horários de atendimento!`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setJustCreatedCreds(null)}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm min-h-[48px] rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95"
                 >
-                  <MessageCircle className="w-4 h-4" /> Enviar Dados pelo WhatsApp
+                  <MessageCircle className="w-5 h-5" /> Enviar Dados pelo WhatsApp
                 </a>
               )}
 
               <button
                 type="button"
                 onClick={() => setJustCreatedCreds(null)}
-                className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl transition-colors"
+                className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-sm min-h-[48px] rounded-xl transition-all active:scale-95"
               >
                 Concluir
               </button>

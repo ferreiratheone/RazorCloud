@@ -68,6 +68,8 @@ ALTER TABLE IF EXISTS public.users DROP CONSTRAINT IF EXISTS users_id_fkey;
 ALTER TABLE IF EXISTS public.users ALTER COLUMN id SET DEFAULT uuid_generate_v4();
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS access_password TEXT;
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS password_changes_count INT NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_users_org ON public.users (organization_id);
 CREATE INDEX IF NOT EXISTS idx_users_role ON public.users (organization_id, role);
@@ -483,6 +485,12 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_auth_user_id;
 
+    UPDATE public.users 
+    SET access_password = new_password,
+        password_changes_count = 0,
+        updated_at = NOW()
+    WHERE id = target_user_id;
+
     RETURN jsonb_build_object('success', true, 'message', 'Senha atualizada com sucesso.');
   END IF;
 
@@ -501,12 +509,22 @@ BEGIN
       WHERE id = v_auth_user_id;
 
       UPDATE public.users 
-      SET auth_user_id = v_auth_user_id 
+      SET auth_user_id = v_auth_user_id,
+          access_password = new_password,
+          password_changes_count = 0,
+          updated_at = NOW()
       WHERE id = target_user_id;
 
       RETURN jsonb_build_object('success', true, 'message', 'Senha atualizada e usuário vinculado com sucesso.');
     END IF;
   END IF;
+
+  -- Atualizar a senha visível mesmo se ainda precisa de signUp no auth
+  UPDATE public.users 
+  SET access_password = new_password,
+      password_changes_count = 0,
+      updated_at = NOW()
+  WHERE id = target_user_id;
 
   -- Se o usuário ainda não existe em auth.users, sinalizar para criar via signUp
   RETURN jsonb_build_object('success', true, 'needs_signup', true);
@@ -514,6 +532,62 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.set_barber_password(UUID, TEXT) TO authenticated, anon;
+
+-- Nova RPC: Barbeiro altera sua própria senha (permitido apenas 1 vez)
+CREATE OR REPLACE FUNCTION public.barber_change_password(new_password TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, extensions
+AS $$
+DECLARE
+  v_caller_auth_id UUID;
+  v_user_id UUID;
+  v_role TEXT;
+  v_changes INT;
+BEGIN
+  v_caller_auth_id := auth.uid();
+  IF v_caller_auth_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Você precisa estar logado para alterar sua senha.');
+  END IF;
+
+  SELECT id, role, COALESCE(password_changes_count, 0)
+  INTO v_user_id, v_role, v_changes
+  FROM public.users
+  WHERE id = v_caller_auth_id OR auth_user_id = v_caller_auth_id
+  LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Perfil de usuário não encontrado.');
+  END IF;
+
+  -- Se for barbeiro e já tiver alterado 1 vez
+  IF v_role = 'barber' AND v_changes >= 1 THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'limit_reached', true,
+      'error', 'Você já alterou sua senha 1 vez. Caso precise alterá-la novamente ou tenha esquecido, comunique o administrador/dono da barbearia.'
+    );
+  END IF;
+
+  -- Atualizar no auth.users
+  UPDATE auth.users
+  SET encrypted_password = extensions.crypt(new_password, extensions.gen_salt('bf')),
+      updated_at = NOW()
+  WHERE id = v_caller_auth_id;
+
+  -- Atualizar no public.users e incrementar o contador
+  UPDATE public.users
+  SET access_password = new_password,
+      password_changes_count = v_changes + 1,
+      updated_at = NOW()
+  WHERE id = v_user_id;
+
+  RETURN jsonb_build_object('success', true, 'message', 'Senha alterada com sucesso.');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.barber_change_password(TEXT) TO authenticated;
 
 -- ==============================================================================
 -- 9. CONFIRMAÇÃO AUTOMÁTICA DE E-MAILS (DISPENSA VERIFICAÇÃO DE CAIXA DE ENTRADA)

@@ -9,15 +9,15 @@ const RazorCloudBookingPage = lazy(() => import('./components/public/BookingWiza
 const RazorCloudAdminShell = lazy(() => import('./components/dashboard/RazorCloudAdminShell'));
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'public' | 'dashboard' | 'auth'>('auth');
-  const [slug, setSlug] = useState('');
+  const [currentView, setCurrentView] = useState<'public' | 'dashboard' | 'auth'>('public');
+  const [slug, setSlug] = useState('fratresbarbearia');
   const [isPending, startTransition] = useTransition();
   const [isLoadingSession, setIsLoadingSession] = useState(true);
 
   const [organization, setOrganization] = useState<Organization>({
-    id: 'org-main',
-    name: 'Ferreira Barber',
-    slug: 'ferreirabarber',
+    id: '02f3cc71-2747-496b-a241-20dfbae56d32',
+    name: 'Fratres Barbearia',
+    slug: 'fratresbarbearia',
   });
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -27,23 +27,20 @@ export default function App() {
     function parseHashRoute() {
       const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
       
-      if (hash === 'admin') {
+      if (hash === 'admin' || hash === 'login') {
         if (currentUser) {
           setCurrentView('dashboard');
         } else {
           setCurrentView('auth');
         }
       } else if (hash) {
-        // Se houver um slug de barbearia (ex: #/ferreirabarber), exibe a vitrine do cliente
+        // Se houver um slug específico (ex: #/fratresbarbearia), exibe o agendamento
         setSlug(hash);
         setCurrentView('public');
       } else {
-        // Raiz do SaaS sem hash: painel se autenticado, ou login
-        if (currentUser) {
-          setCurrentView('dashboard');
-        } else {
-          setCurrentView('auth');
-        }
+        // Raiz do site (sem hash ou #/): vai direto para o agendamento da Fratres Barbearia!
+        setSlug('fratresbarbearia');
+        setCurrentView('public');
       }
     }
 
@@ -66,20 +63,26 @@ export default function App() {
             setOrganization(org);
 
             const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
-            if (hash === 'admin' || !hash) {
-              setSlug(org.slug);
+            if (hash === 'admin' || hash === 'login') {
+              setSlug(org.slug || 'fratresbarbearia');
               setCurrentView('dashboard');
-            } else {
+            } else if (hash) {
               setSlug(hash);
+              setCurrentView('public');
+            } else {
+              setSlug(org.slug || 'fratresbarbearia');
               setCurrentView('public');
             }
           } else {
             const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
-            if (hash && hash !== 'admin') {
+            if (hash === 'admin' || hash === 'login') {
+              setCurrentView('auth');
+            } else if (hash) {
               setSlug(hash);
               setCurrentView('public');
             } else {
-              setCurrentView('auth');
+              setSlug('fratresbarbearia');
+              setCurrentView('public');
             }
           }
         }
@@ -100,16 +103,21 @@ export default function App() {
           if (user && org && isMounted) {
             setCurrentUser(user);
             setOrganization(org);
-            setSlug(org.slug);
+            setSlug(org.slug || 'fratresbarbearia');
             const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
-            if (hash === 'admin' || !hash) {
+            if (hash === 'admin' || hash === 'login') {
               setCurrentView('dashboard');
             }
           }
         } else if (event === 'SIGNED_OUT') {
           if (isMounted) {
             setCurrentUser(null);
-            setCurrentView('auth');
+            const hash = window.location.hash.replace('#/', '').replace('#', '').trim();
+            if (hash === 'admin' || hash === 'login') {
+              setCurrentView('auth');
+            } else {
+              setCurrentView('public');
+            }
           }
         }
       });
@@ -127,7 +135,7 @@ export default function App() {
 
   function handleViewPublicPage(targetSlug: string) {
     if (typeof window !== 'undefined') {
-      window.open(`/#/${targetSlug}`, '_blank');
+      window.open(`/#/${targetSlug || 'fratresbarbearia'}`, '_blank');
     }
   }
 
@@ -136,6 +144,7 @@ export default function App() {
       await supabase.auth.signOut();
     }
     localStorage.removeItem('razorcloud_current_user');
+    localStorage.removeItem('fratres_current_user');
     setCurrentUser(null);
     window.location.hash = '#/admin';
     setCurrentView('auth');
@@ -145,7 +154,7 @@ export default function App() {
     startTransition(() => {
       setCurrentUser(user);
       setOrganization(org);
-      setSlug(org.slug);
+      setSlug(org.slug || 'fratresbarbearia');
       window.location.hash = '#/admin';
       setCurrentView('dashboard');
     });
@@ -155,7 +164,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-50 flex flex-col items-center justify-center p-4">
         <Loader2 className="w-8 h-8 animate-spin text-zinc-400 mb-3" />
-        <p className="text-xs text-zinc-500">Inicializando RazorCloud...</p>
+        <p className="text-xs text-zinc-500">Carregando Fratres Barbearia...</p>
       </div>
     );
   }
@@ -181,6 +190,7 @@ export default function App() {
                 setOrganization(newOrg);
                 setSlug(newOrg.slug);
               }}
+              onUpdateUser={(newUser) => setCurrentUser(newUser)}
               onLogout={handleLogout}
               onViewPublicPage={handleViewPublicPage}
             />

@@ -3,6 +3,7 @@ import { getNormalizedCategory } from './categories';
 import type { 
   Organization, 
   UserProfile, 
+  Role,
   Service, 
   Schedule, 
   Appointment, 
@@ -13,7 +14,7 @@ import type {
   FinancialMetrics
 } from '@/src/types/database';
 
-const LOCAL_STORAGE_KEY_PREFIX = 'razorcloud_';
+const LOCAL_STORAGE_KEY_PREFIX = 'fratres_';
 
 export function getLocalDateString(dateInput: string | Date): string {
   const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
@@ -26,7 +27,7 @@ export function getLocalDateString(dateInput: string | Date): string {
 function getLocalData<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY_PREFIX + key);
+    const raw = localStorage.getItem('fratres_' + key) || localStorage.getItem('razorcloud_' + key);
     return raw ? JSON.parse(raw) : fallback;
   } catch (e) {
     return fallback;
@@ -72,11 +73,12 @@ export const DataService = {
           const fullName = meta.full_name || 'Proprietário';
           const baseSlug = userSavedOrg?.slug || (shopName.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'barbearia') + '-' + authUserId.substring(0, 4);
 
-          // 1. Buscar perfil do usuário no Supabase (por auth_user_id oficial, id ou e-mail)
+          // 1. Buscar perfil do usuário no Supabase com projeção explícita de colunas
           let userProfile: any = null;
+          const userCols = 'id, auth_user_id, organization_id, email, full_name, role, avatar_url, phone, rating, active, access_password, password_changes_count, created_at, updated_at';
           const { data: profileByAuth } = await supabase
             .from('users')
-            .select('*')
+            .select(userCols)
             .eq('auth_user_id', authUserId)
             .maybeSingle();
 
@@ -85,7 +87,7 @@ export const DataService = {
           } else {
             const { data: profileById } = await supabase
               .from('users')
-              .select('*')
+              .select(userCols)
               .eq('id', authUserId)
               .maybeSingle();
 
@@ -94,7 +96,7 @@ export const DataService = {
             } else if (userEmail) {
               const { data: profileByEmail } = await supabase
                 .from('users')
-                .select('*')
+                .select(userCols)
                 .ilike('email', userEmail.trim())
                 .maybeSingle();
 
@@ -114,9 +116,10 @@ export const DataService = {
           }
 
           if (userProfile && userProfile.organization_id) {
+            const orgCols = 'id, name, slug, address, phone, logo_url, plans_enabled, products_enabled, whatsapp_auto_enabled, whatsapp_api_url, whatsapp_api_instance, whatsapp_api_token, whatsapp_reminder_hours, whatsapp_msg_confirmation, whatsapp_msg_reminder, created_at, updated_at';
             const { data: orgData } = await supabase
               .from('organizations')
-              .select('*')
+              .select(orgCols)
               .eq('id', userProfile.organization_id)
               .maybeSingle();
 
@@ -187,9 +190,11 @@ export const DataService = {
   async getOrganizationBySlug(slug: string): Promise<Organization | null> {
     if (isSupabaseConfigured()) {
       try {
+        // Seleção segura de colunas públicas (omite whatsapp_api_token de visitantes anônimos)
+        const publicOrgCols = 'id, name, slug, address, phone, logo_url, plans_enabled, products_enabled, whatsapp_auto_enabled, whatsapp_reminder_hours, whatsapp_msg_confirmation, whatsapp_msg_reminder, created_at, updated_at';
         const { data, error } = await supabase
           .from('organizations')
-          .select('*')
+          .select(publicOrgCols)
           .eq('slug', slug)
           .maybeSingle();
 
@@ -213,9 +218,10 @@ export const DataService = {
   async getOrganization(orgId: string): Promise<Organization | null> {
     if (isSupabaseConfigured()) {
       try {
+        const fullOrgCols = 'id, name, slug, address, phone, logo_url, plans_enabled, products_enabled, whatsapp_auto_enabled, whatsapp_api_url, whatsapp_api_instance, whatsapp_api_token, whatsapp_reminder_hours, whatsapp_msg_confirmation, whatsapp_msg_reminder, created_at, updated_at';
         const { data, error } = await supabase
           .from('organizations')
-          .select('*')
+          .select(fullOrgCols)
           .eq('id', orgId)
           .single();
         if (data && !error) return data as Organization;
@@ -308,7 +314,7 @@ export const DataService = {
         if (isUuid) {
           const { data, error } = await supabase
             .from('services')
-            .select('*')
+            .select('id, organization_id, name, description, price, duration, active, category, is_promotional, promotional_price, promo_days, created_at, updated_at')
             .eq('organization_id', orgId)
             .order('name', { ascending: true });
 
@@ -470,7 +476,7 @@ export const DataService = {
         if (isUuid) {
           const { data, error } = await supabase
             .from('products')
-            .select('*')
+            .select('id, organization_id, name, description, price, category, image_url, stock, active, created_at, updated_at')
             .eq('organization_id', orgId)
             .order('name', { ascending: true });
 
@@ -598,9 +604,10 @@ export const DataService = {
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
         if (isUuid) {
+          // Projeção segura: omite access_password da listagem geral da equipe
           const { data, error } = await supabase
             .from('users')
-            .select('*')
+            .select('id, organization_id, email, full_name, role, avatar_url, phone, rating, active, password_changes_count, created_at, updated_at')
             .eq('organization_id', orgId)
             .order('role', { ascending: true });
 
@@ -646,6 +653,8 @@ export const DataService = {
       avatar_url: barber.avatar_url,
       rating: barber.rating || 5.0,
       active: barber.active ?? true,
+      access_password: barber.access_password,
+      password_changes_count: barber.password_changes_count ?? 0,
       created_at: new Date().toISOString(),
     };
 
@@ -670,6 +679,13 @@ export const DataService = {
             active: barber.active ?? true,
           };
 
+          if (barber.access_password !== undefined) {
+            payload.access_password = barber.access_password;
+          }
+          if (barber.password_changes_count !== undefined) {
+            payload.password_changes_count = barber.password_changes_count;
+          }
+
           if ((barber as any).auth_user_id) {
             payload.auth_user_id = (barber as any).auth_user_id;
           }
@@ -678,18 +694,35 @@ export const DataService = {
             payload.id = barberId;
           }
 
-          const { data, error } = await supabase
+          let { data, error } = await supabase
             .from('users')
             .upsert([payload])
             .select()
             .single();
 
+          if (error && (error.message?.includes('access_password') || error.message?.includes('password_changes_count'))) {
+            delete payload.access_password;
+            delete payload.password_changes_count;
+            const retry = await supabase
+              .from('users')
+              .upsert([payload])
+              .select()
+              .single();
+            data = retry.data;
+            error = retry.error;
+          }
+
           if (data && !error) {
+            const enriched = {
+              ...(data as UserProfile),
+              access_password: barber.access_password ?? (data as any).access_password,
+              password_changes_count: barber.password_changes_count ?? (data as any).password_changes_count ?? 0,
+            };
             const list = getLocalData<UserProfile[]>('team_' + barber.organization_id, []);
             const filtered = list.filter(b => b.id !== data.id && b.id !== barber.id);
-            const updated = [data as UserProfile, ...filtered];
+            const updated = [enriched, ...filtered];
             setLocalData('team_' + barber.organization_id, updated);
-            return data as UserProfile;
+            return enriched;
           } else if (error) {
             console.error('Erro detalhado ao gravar barbeiro no Supabase:', error);
           }
@@ -718,6 +751,10 @@ export const DataService = {
 
   async createTeamMember(member: Partial<UserProfile> & { organization_id: string; password?: string }): Promise<UserProfile> {
     const { password, ...barberData } = member;
+    if (password) {
+      barberData.access_password = password.trim();
+      barberData.password_changes_count = 0;
+    }
 
     // Se o dono forneceu e-mail e senha, registrar no Supabase Auth com client isolado sem deslogar o dono
     if (password && barberData.email && isSupabaseConfigured()) {
@@ -763,13 +800,20 @@ export const DataService = {
 
   async updateTeamMember(
     id: string, 
-    updates: Partial<UserProfile> & { password?: string }, 
+    updates: Partial<UserProfile> & { password?: string; reset_changes_count?: boolean }, 
     orgId: string
   ): Promise<UserProfile> {
-    const { password, ...barberUpdates } = updates;
+    const { password, reset_changes_count, ...barberUpdates } = updates;
     const list = await this.getTeam(orgId);
     const existing = list.find(b => b.id === id);
     const merged: any = { ...existing, ...barberUpdates, id, organization_id: orgId };
+
+    if (password) {
+      merged.access_password = password.trim();
+      merged.password_changes_count = 0; // O Dono definiu a senha, reseta para 0 para permitir 1 alteração pelo barbeiro
+    } else if (reset_changes_count) {
+      merged.password_changes_count = 0;
+    }
 
     // Se o dono forneceu uma nova senha ao editar o barbeiro
     if (password && merged.email && isSupabaseConfigured()) {
@@ -817,6 +861,168 @@ export const DataService = {
     return this.saveBarber(merged);
   },
 
+  /**
+   * Alteração de senha pelo próprio usuário autenticado (Barbeiro ou Dono).
+   * Se for barbeiro, permite apenas 1 vez (password_changes_count < 1).
+   * Se já tiver alterado, retorna erro orientando falar com o administrador/dono.
+   */
+  async barberChangePassword(newPassword: string): Promise<{ success: boolean; limit_reached?: boolean; error?: string }> {
+    const trimmed = newPassword.trim();
+    if (!trimmed || trimmed.length < 6) {
+      return { success: false, error: 'A nova senha deve ter no mínimo 6 caracteres.' };
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('barber_change_password', {
+          new_password: trimmed
+        });
+
+        if (!rpcErr && rpcRes) {
+          if (!rpcRes.success) {
+            return {
+              success: false,
+              limit_reached: Boolean(rpcRes.limit_reached),
+              error: rpcRes.error || 'Não foi possível alterar a senha.'
+            };
+          }
+          return { success: true };
+        }
+      } catch (e) {
+        console.warn('Erro ao chamar RPC barber_change_password:', e);
+      }
+
+      // Se RPC falhar ou não existir, tentar via supabase.auth.updateUser
+      try {
+        const { data: authData, error: authErr } = await supabase.auth.getUser();
+        if (authData?.user && !authErr) {
+          const userId = authData.user.id;
+          const { data: profile } = await supabase
+            .from('users')
+            .select('id, auth_user_id, organization_id, email, full_name, role, password_changes_count')
+            .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
+            .maybeSingle();
+
+          if (profile) {
+            if (profile.role === 'barber' && (profile.password_changes_count || 0) >= 1) {
+              return {
+                success: false,
+                limit_reached: true,
+                error: 'Você já alterou sua senha 1 vez. Por segurança, comunique o administrador/dono da barbearia para redefinir seu acesso.'
+              };
+            }
+
+            const { error: updateAuthErr } = await supabase.auth.updateUser({ password: trimmed });
+            if (updateAuthErr) throw updateAuthErr;
+
+            try {
+              await supabase
+                .from('users')
+                .update({
+                  access_password: trimmed,
+                  password_changes_count: (profile.password_changes_count || 0) + 1,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', profile.id);
+            } catch (uErr) {
+              console.warn('Atualização de users table:', uErr);
+            }
+
+            return { success: true };
+          }
+        }
+      } catch (directErr: any) {
+        return { success: false, error: directErr.message || 'Falha ao alterar senha.' };
+      }
+    }
+
+    // Modo local / offline
+    const localUser = getLocalData<UserProfile | null>('current_user', null);
+    if (localUser) {
+      if (localUser.role === 'barber' && (localUser.password_changes_count || 0) >= 1) {
+        return {
+          success: false,
+          limit_reached: true,
+          error: 'Você já alterou sua senha 1 vez. Comunique o administrador/dono para nova redefinição.'
+        };
+      }
+      localUser.access_password = trimmed;
+      localUser.password_changes_count = (localUser.password_changes_count || 0) + 1;
+      setLocalData('current_user', localUser);
+      return { success: true };
+    }
+
+    return { success: false, error: 'Usuário não autenticado.' };
+  },
+
+  /**
+   * Consulta o perfil de um usuário por e-mail para verificar se pode alterar a senha (1 vez)
+   * ou se já estourou o limite e precisa falar com o dono.
+   */
+  async checkUserPasswordChangeEligibility(email: string): Promise<{
+    found: boolean;
+    role?: Role;
+    password_changes_count?: number;
+    can_change: boolean;
+    owner_phone?: string;
+    owner_name?: string;
+    error?: string;
+  }> {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return { found: false, can_change: false, error: 'Informe um e-mail válido.' };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: userProfile } = await supabase
+          .from('users')
+          .select('*, organizations(*)')
+          .ilike('email', cleanEmail)
+          .maybeSingle();
+
+        if (userProfile) {
+          const isBarber = userProfile.role === 'barber';
+          const changes = userProfile.password_changes_count || 0;
+          const canChange = !isBarber || changes < 1;
+
+          let ownerPhone = '';
+          let ownerName = 'Administrador';
+
+          if (userProfile.organizations) {
+            ownerPhone = userProfile.organizations.phone || '';
+          }
+
+          if (!ownerPhone && userProfile.organization_id) {
+            const { data: ownerUser } = await supabase
+              .from('users')
+              .select('full_name, phone')
+              .eq('organization_id', userProfile.organization_id)
+              .in('role', ['owner', 'admin'])
+              .limit(1)
+              .maybeSingle();
+
+            if (ownerUser) {
+              ownerPhone = ownerUser.phone || '';
+              ownerName = ownerUser.full_name || 'Administrador';
+            }
+          }
+
+          return {
+            found: true,
+            role: userProfile.role,
+            password_changes_count: changes,
+            can_change: canChange,
+            owner_phone: ownerPhone,
+            owner_name: ownerName
+          };
+        }
+      } catch (e) {
+        console.warn('Erro ao consultar elegibilidade:', e);
+      }
+    }
+
+    return { found: false, can_change: false, error: 'Conta não encontrada para o e-mail informado.' };
+  },
+
   async deleteTeamMember(id: string, orgId: string): Promise<void> {
     return this.deleteBarber(id, orgId);
   },
@@ -832,7 +1038,7 @@ export const DataService = {
         if (isUuid) {
           let query = supabase
             .from('schedules')
-            .select('*')
+            .select('id, organization_id, user_id, day_of_week, start_time, end_time, is_closed, has_break, break_start, break_end, slot_interval, created_at')
             .eq('organization_id', orgId);
 
           if (userId) {
@@ -974,9 +1180,11 @@ export const DataService = {
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
         if (isUuid) {
+          // Projeção explícita de colunas seguras
+          const aptCols = 'id, organization_id, service_id, user_id, client_name, client_phone, client_email, start_time, end_time, status, price, notes, is_subscription, products, products_total, additional_services, created_at, updated_at, service:services(id, name, price, duration), barber:users(id, full_name, avatar_url, role)';
           let query = supabase
             .from('appointments')
-            .select('*, service:services(*), barber:users(*)')
+            .select(aptCols)
             .eq('organization_id', orgId);
 
           if (barberId && barberId !== 'all') {
@@ -987,8 +1195,9 @@ export const DataService = {
 
           if (!error && Array.isArray(data)) {
             setLocalData('appointments_' + orgId, data);
-            if (!dateStr) return data as Appointment[];
-            return (data as Appointment[]).filter(a => getLocalDateString(a.start_time) === dateStr);
+            const typedList = data as unknown as Appointment[];
+            if (!dateStr) return typedList;
+            return typedList.filter(a => getLocalDateString(a.start_time) === dateStr);
           }
         }
       } catch (e) {
@@ -1003,6 +1212,44 @@ export const DataService = {
     if (!dateStr) return list;
 
     return list.filter(a => getLocalDateString(a.start_time) === dateStr);
+  },
+
+  // --- CONSULTA SEGURA DE HORÁRIOS OCUPADOS (LGPD / PÚBLICA) ---
+  // Utiliza a view pública segura que NUNCA expõe nomes ou telefones de clientes
+  async getOccupiedSlots(orgId: string, dateStr?: string): Promise<{ id: string; user_id: string; start_time: string; end_time: string; status: string }[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
+        if (isUuid) {
+          let query = supabase
+            .from('horarios_ocupados')
+            .select('id, user_id, start_time, end_time, status')
+            .eq('organization_id', orgId);
+
+          if (dateStr) {
+            query = query.gte('start_time', `${dateStr}T00:00:00`).lte('start_time', `${dateStr}T23:59:59`);
+          }
+
+          const { data, error } = await query;
+          if (!error && Array.isArray(data)) {
+            return data;
+          }
+        }
+      } catch (e) {
+        console.warn('Aviso ao consultar view segura de horarios_ocupados:', e);
+      }
+    }
+
+    const localApts = getLocalData<Appointment[]>('appointments_' + orgId, []);
+    return localApts
+      .filter(a => a.status !== 'cancelled')
+      .map(a => ({
+        id: a.id,
+        user_id: a.user_id,
+        start_time: a.start_time,
+        end_time: a.end_time,
+        status: a.status
+      }));
   },
 
   async createAppointment(appointment: Omit<Appointment, 'id'>): Promise<Appointment> {
@@ -1034,7 +1281,34 @@ export const DataService = {
         const isOrgUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.organization_id);
 
         if (isOrgUuid) {
-          // 1. Validar / Resolver user_id para um UUID real no Supabase
+          // 1. Invocar a Supabase Edge Function "criar-agendamento" (Back-End Blindado com Anti-Bot e Anti-Double Booking)
+          try {
+            const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('criar-agendamento', {
+              body: {
+                ...payload,
+                turnstile_token: (appointment as any).turnstile_token || undefined,
+              }
+            });
+
+            if (!edgeErr && edgeData && edgeData.success && edgeData.appointment) {
+              const list = getLocalData<Appointment[]>('appointments_' + appointment.organization_id, []);
+              setLocalData('appointments_' + appointment.organization_id, [edgeData.appointment, ...list]);
+              return edgeData.appointment as Appointment;
+            }
+
+            if (edgeData && !edgeData.success && edgeData.error) {
+              throw new Error(edgeData.error);
+            }
+          } catch (edgeCallErr: any) {
+            // Se for erro de validação ou anti-robô, repassa para o usuário
+            if (edgeCallErr.message && !edgeCallErr.message.includes('FunctionsFetchError') && !edgeCallErr.message.includes('Failed to send a request')) {
+              throw edgeCallErr;
+            }
+            console.warn('[EDGE FUNCTION FALLBACK]', edgeCallErr);
+          }
+
+          // 2. Fallback de banco direto caso a Edge Function não esteja deployada
+          // Validar / Resolver user_id para um UUID real no Supabase
           const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.user_id);
           if (!isUserUuid) {
             const { data: users } = await supabase
@@ -1209,7 +1483,7 @@ export const DataService = {
         if (isUuid) {
           const { data, error } = await supabase
             .from('membership_plans')
-            .select('*')
+            .select('id, organization_id, name, description, price, cuts_per_month, active, created_at')
             .eq('organization_id', orgId)
             .order('price', { ascending: true });
 
@@ -1315,15 +1589,16 @@ export const DataService = {
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
         if (isUuid) {
+          const subCols = 'id, organization_id, plan_id, client_name, client_phone, cuts_used, cuts_total, renewal_date, status, created_at, plan:membership_plans(id, name, price, cuts_per_month)';
           const { data, error } = await supabase
             .from('customer_subscriptions')
-            .select('*, plan:membership_plans(*)')
+            .select(subCols)
             .eq('organization_id', orgId)
             .order('created_at', { ascending: false });
 
           if (!error && Array.isArray(data)) {
             setLocalData('subscriptions_' + orgId, data);
-            return data as CustomerSubscription[];
+            return data as unknown as CustomerSubscription[];
           }
         }
       } catch (e) {
@@ -1356,16 +1631,17 @@ export const DataService = {
             status: sub.status || 'active',
           };
 
+          const subCols = 'id, organization_id, plan_id, client_name, client_phone, cuts_used, cuts_total, renewal_date, status, created_at, plan:membership_plans(id, name, price, cuts_per_month)';
           const { data, error } = await supabase
             .from('customer_subscriptions')
             .insert([payload])
-            .select('*, plan:membership_plans(*)')
+            .select(subCols)
             .single();
 
           if (data && !error) {
             const list = getLocalData<CustomerSubscription[]>('subscriptions_' + sub.organization_id, []);
-            setLocalData('subscriptions_' + sub.organization_id, [data, ...list]);
-            return data as CustomerSubscription;
+            setLocalData('subscriptions_' + sub.organization_id, [data as unknown as CustomerSubscription, ...list]);
+            return data as unknown as CustomerSubscription;
           }
         }
       } catch (e) {
@@ -1407,15 +1683,58 @@ export const DataService = {
     setLocalData('subscriptions_' + orgId, updated);
   },
 
+  // Consulta higienizada de assinatura (LGPD: não baixa a tabela completa de assinantes para o front anônimo)
   async checkClientSubscription(orgId: string, phone: string): Promise<CustomerSubscription | null> {
     const cleanInputPhone = phone.replace(/\D/g, '');
     if (!cleanInputPhone) return null;
+
+    if (isSupabaseConfigured()) {
+      try {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
+        if (isUuid) {
+          // RPC com Security Definer para validação pontual de número de telefone
+          const { data: rpcData, error: rpcErr } = await (supabase as any)
+            .rpc('verificar_assinatura_cliente', {
+              p_org_id: orgId,
+              p_phone: cleanInputPhone
+            });
+
+          if (!rpcErr && Array.isArray(rpcData) && rpcData.length > 0 && rpcData[0].has_active_subscription) {
+            const first = rpcData[0];
+            return {
+              id: 'verified-sub',
+              organization_id: orgId,
+              plan_id: 'plan-vip',
+              client_name: 'Cliente VIP',
+              client_phone: cleanInputPhone,
+              cuts_used: 0,
+              cuts_total: Number(first.cuts_remaining) || 2,
+              renewal_date: new Date().toISOString(),
+              status: 'active',
+              created_at: new Date().toISOString(),
+              plan: {
+                id: 'plan-vip',
+                organization_id: orgId,
+                name: first.plan_name || 'Plano VIP',
+                description: 'Plano com cortes inclusos',
+                price: 0,
+                cuts_per_month: Number(first.cuts_remaining) || 2,
+                active: true,
+                created_at: new Date().toISOString()
+              }
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('Fallback na verificação de assinatura por RPC:', e);
+      }
+    }
 
     const subs = await this.getSubscriptions(orgId);
     const plans = await this.getPlans(orgId);
 
     const activeSub = subs.find(s => {
-      const cleanSubPhone = s.client_phone.replace(/\D/g, '');
+      const cleanSubPhone = (s.client_phone || '').replace(/\D/g, '');
       return (
         s.status === 'active' &&
         (cleanSubPhone.includes(cleanInputPhone) || cleanInputPhone.includes(cleanSubPhone))
@@ -1461,7 +1780,8 @@ export const DataService = {
     const [endHour, endMin] = daySchedule.end_time.split(':').map(Number);
 
     const dateKey = getLocalDateString(targetDate);
-    const appointments = await this.getAppointments(orgId, dateKey);
+    // Utiliza a view pública de horários ocupados (Zero vazamento de dados de clientes / LGPD)
+    const occupiedSlots = await this.getOccupiedSlots(orgId, dateKey);
     const team = await this.getTeam(orgId);
     const totalBarberCount = Math.max(1, team.filter(t => t.active !== false).length);
 
@@ -1511,7 +1831,7 @@ export const DataService = {
 
       if (available) {
         if (isSpecificBarber) {
-          for (const apt of appointments) {
+          for (const apt of occupiedSlots) {
             if (apt.status === 'cancelled') continue;
             if (apt.user_id !== barberId) continue;
 
@@ -1527,7 +1847,7 @@ export const DataService = {
           }
         } else {
           const busyBarbers = new Set<string>();
-          for (const apt of appointments) {
+          for (const apt of occupiedSlots) {
             if (apt.status === 'cancelled') continue;
 
             const aptStart = new Date(apt.start_time).getTime();

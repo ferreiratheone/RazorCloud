@@ -49,7 +49,7 @@ const WIZARD_CATEGORIES = [
   { id: 'Outros', label: 'Outros Serviços', icon: '💈' }
 ];
 
-export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: BookingWizardProps) {
+export default function RazorCloudBookingPage({ slug = 'fratresbarbearia' }: BookingWizardProps) {
   // Estado do Estabelecimento & Dados
   const [loading, setLoading] = useState(true);
   const [tenant, setTenant] = useState<Organization | null>(null);
@@ -81,6 +81,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   const [hasRememberedClient, setHasRememberedClient] = useState(false);
   const [activeSubscription, setActiveSubscription] = useState<CustomerSubscription | null>(null);
   const [isSubBooking, setIsSubBooking] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -117,7 +118,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        const raw = localStorage.getItem('razorcloud_client_info');
+        const raw = localStorage.getItem('fratres_client_info') || localStorage.getItem('razorcloud_client_info');
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed?.name) {
@@ -131,6 +132,51 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
       } catch (e) {}
     }
   }, []);
+
+  // Inicializar widget do Cloudflare Turnstile se chave configurada na Etapa 4 (Confirmação)
+  useEffect(() => {
+    const siteKey = (import.meta as any).env?.VITE_TURNSTILE_SITE_KEY;
+    if (step === 4 && siteKey && typeof window !== 'undefined') {
+      let intervalId: any = null;
+      let attempts = 0;
+
+      const tryRender = () => {
+        attempts++;
+        const container = document.getElementById('cf-turnstile-container');
+        if (container && (window as any).turnstile) {
+          if (!container.hasChildNodes()) {
+            try {
+              (window as any).turnstile.render(container, {
+                sitekey: siteKey,
+                callback: (token: string) => {
+                  setTurnstileToken(token);
+                  setErrorMessage(null);
+                },
+                'expired-callback': () => {
+                  setTurnstileToken(null);
+                },
+                theme: 'dark',
+              });
+            } catch (e) {
+              console.warn('[TURNSTILE INIT]', e);
+            }
+          }
+          if (intervalId) clearInterval(intervalId);
+        } else if (attempts > 30 && intervalId) {
+          clearInterval(intervalId);
+        }
+      };
+
+      tryRender();
+      if (!(window as any).turnstile || !document.getElementById('cf-turnstile-container')) {
+        intervalId = setInterval(tryRender, 300);
+      }
+
+      return () => {
+        if (intervalId) clearInterval(intervalId);
+      };
+    }
+  }, [step]);
 
   // Gerar datas dos próximos 7 dias
   const dateOptions = useMemo(() => {
@@ -171,11 +217,11 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         } else {
           // Fallback seguro
           const fallbackOrg: Organization = {
-            id: 'org-main',
-            name: 'Ferreira Barber',
-            slug: 'ferreirabarber',
-            address: 'Av. Paulista, 1000 - Jardins, São Paulo',
-            phone: '(11) 99999-8888',
+            id: '02f3cc71-2747-496b-a241-20dfbae56d32',
+            name: 'Fratres Barbearia',
+            slug: 'fratresbarbearia',
+            address: 'R. Gen. Osório - Boa Vista, Limeira - SP, 13486-113',
+            phone: '(19) 98170-4277',
             plans_enabled: true,
             products_enabled: true,
           };
@@ -353,7 +399,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
     // Salvar memória do cliente no navegador
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('razorcloud_client_info', JSON.stringify({
+        localStorage.setItem('fratres_client_info', JSON.stringify({
           name: clientName.trim(),
           phone: clientPhone.trim(),
         }));
@@ -396,7 +442,8 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         })),
         products_total: productsTotal,
         additional_services: additionalServices.length > 0 ? additionalServices : undefined,
-      });
+        turnstile_token: turnstileToken || undefined,
+      } as any);
 
       // Debitar 1 corte do plano do assinante se aplicável
       if (activeSubscription && isSubBooking) {
@@ -557,7 +604,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
               href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold py-3.5 px-4 rounded-2xl text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+              className="w-full min-h-[48px] bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold py-3.5 px-4 rounded-2xl text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95"
             >
               <Share2 className="w-4 h-4" /> Enviar Comprovante no WhatsApp
             </a>
@@ -571,7 +618,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
                 setSelectedSlot(null);
                 setSelectedProductQuantities({});
               }}
-              className="w-full text-zinc-500 hover:text-zinc-300 text-xs py-2 transition-colors"
+              className="w-full min-h-[48px] text-zinc-400 hover:text-white text-xs font-semibold py-2.5 transition-colors active:scale-95 flex items-center justify-center"
             >
               Fazer Outro Agendamento
             </button>
@@ -579,16 +626,11 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         </div>
 
         {/* Footer */}
-        <footer className="w-full text-center pb-2 text-[11px] text-zinc-600">
-          Site desenvolvido por{' '}
-          <a 
-            href="https://instagram.com/ferreiraatheone" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-zinc-400 hover:text-pink-400 font-semibold inline-flex items-center gap-1 transition-colors"
-          >
-            <Instagram className="w-3 h-3 text-pink-500" />
-            @ferreiraatheone
+        <footer className="w-full text-center pb-2 text-[11px] text-zinc-600 flex items-center justify-center gap-2">
+          <span>© {tenant.name}</span>
+          <span className="text-zinc-700">•</span>
+          <a href="/#/admin" className="text-zinc-500 hover:text-zinc-300 transition-colors">
+            Acesso da Equipe
           </a>
         </footer>
       </div>
@@ -598,8 +640,8 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   // --- ETAPA 1: ESCOLHA DO SERVIÇO (MULTI-SELEÇÃO & CATEGORIAS) ---
   const renderStep1 = () => (
     <div className="space-y-4 w-full">
-      {/* Barra de Filtro de Categorias */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none max-w-full -mx-1 px-1">
+      {/* Barra de Filtro de Categorias (Carrossel Horizontal com Snap e Touch Targets) */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory -mx-2 px-2 sm:mx-0 sm:px-0 max-w-full">
         {WIZARD_CATEGORIES.map(cat => {
           const isCatActive = wizardCategory === cat.id;
           const countSelectedInCat = services.filter(s => 
@@ -611,16 +653,16 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
               key={cat.id}
               type="button"
               onClick={() => setWizardCategory(cat.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 border shrink-0 ${
+              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-2 border shrink-0 snap-start active:scale-95 ${
                 isCatActive
-                  ? 'bg-white text-zinc-950 border-white shadow-sm'
-                  : 'bg-zinc-900/70 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                  ? 'bg-white text-zinc-950 border-white shadow-md'
+                  : 'bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white'
               }`}
             >
               <span>{cat.icon}</span>
               <span>{cat.label}</span>
               {countSelectedInCat > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                   isCatActive ? 'bg-zinc-900 text-white' : 'bg-emerald-500 text-zinc-950'
                 }`}>
                   {countSelectedInCat}
@@ -632,13 +674,13 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
       </div>
 
       {/* Dica de Multi-Seleção */}
-      <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-xl px-3 py-2 text-[11px] text-zinc-400 flex items-center justify-between gap-2">
+      <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-xl px-3.5 py-2.5 text-[11px] sm:text-xs text-zinc-400 flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
           <span>Selecione 1 ou mais serviços para o mesmo atendimento</span>
         </span>
         {selectedServicesList.length > 0 && (
-          <span className="font-bold text-emerald-400 shrink-0">
+          <span className="font-bold text-emerald-400 shrink-0 text-xs">
             {selectedServicesList.length} marcado(s)
           </span>
         )}
@@ -646,24 +688,25 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
 
       {/* Bandeja de Serviços Já Marcados (Visual Rápido) */}
       {selectedServicesList.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none snap-x snap-mandatory">
           <span className="text-[10px] text-zinc-500 font-bold uppercase shrink-0">Selecionados:</span>
           {selectedServicesList.map(s => (
-            <span 
+            <button 
               key={s.id}
+              type="button"
               onClick={() => toggleServiceSelection(s.id)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-[11px] font-semibold cursor-pointer hover:bg-emerald-500/20 transition-all shrink-0"
+              className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold cursor-pointer hover:bg-emerald-500/20 active:scale-95 transition-all shrink-0 snap-start"
               title="Clique para remover"
             >
-              {s.name}
-              <X className="w-3 h-3 text-emerald-400" />
-            </span>
+              <span>{s.name}</span>
+              <X className="w-3.5 h-3.5 text-emerald-400" />
+            </button>
           ))}
         </div>
       )}
 
       {/* Lista de Serviços */}
-      <div className="space-y-2.5 w-full">
+      <div className="space-y-3 w-full">
         {filteredServices.length === 0 ? (
           <div className="text-center py-10 border border-dashed border-zinc-800 rounded-2xl p-6 text-zinc-500 text-xs">
             <Scissors className="w-6 h-6 mx-auto mb-2 text-zinc-600" />
@@ -679,21 +722,21 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
               <div
                 key={srv.id}
                 onClick={() => toggleServiceSelection(srv.id)}
-                className={`w-full text-left p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between group cursor-pointer select-none
+                className={`w-full text-left p-4 sm:p-5 rounded-2xl border transition-all duration-200 flex items-center justify-between group cursor-pointer select-none active:scale-[0.99]
                   ${isSelected 
                     ? 'bg-zinc-800/90 border-emerald-500/70 shadow-lg ring-1 ring-emerald-500/30' 
-                    : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/60 hover:border-zinc-700'
+                    : 'bg-zinc-900/60 border-zinc-800/80 hover:bg-zinc-800/60 hover:border-zinc-700'
                   }`}
               >
                 {/* Lado Esquerdo: Checkbox & Infos do Serviço */}
-                <div className="flex items-start gap-3 min-w-0 pr-2">
-                  {/* Checkbox estilizado */}
-                  <div className={`w-5 h-5 rounded-lg border mt-0.5 flex items-center justify-center shrink-0 transition-all ${
+                <div className="flex items-start gap-3.5 min-w-0 pr-2">
+                  {/* Checkbox estilizado com toque ampliado */}
+                  <div className={`w-6 h-6 rounded-lg border mt-0.5 flex items-center justify-center shrink-0 transition-all ${
                     isSelected 
                       ? 'bg-emerald-500 border-emerald-400 text-zinc-950 font-bold shadow-sm' 
                       : 'bg-zinc-950/60 border-zinc-700 text-transparent group-hover:border-zinc-500'
                   }`}>
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    <Check className="w-4 h-4 stroke-[3]" />
                   </div>
 
                   <div className="space-y-1 min-w-0">
@@ -709,21 +752,21 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
                       )}
                     </div>
 
-                    <h3 className="font-bold text-xs sm:text-sm text-white group-hover:text-zinc-100 truncate">
+                    <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-zinc-100 truncate">
                       {srv.name}
                     </h3>
                     
                     {srv.description && (
-                      <p className="text-[11px] text-zinc-400 line-clamp-1">{srv.description}</p>
+                      <p className="text-xs text-zinc-400 line-clamp-1">{srv.description}</p>
                     )}
 
-                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
-                      <Clock className="w-3 h-3 text-zinc-500" />
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                      <Clock className="w-3.5 h-3.5 text-zinc-500" />
                       <span>{srv.duration} min</span>
                       {isPromo && srv.promo_days && (
                         <>
                           <span className="text-zinc-600">•</span>
-                          <span className="text-[10px] text-amber-400 font-semibold">{srv.promo_days}</span>
+                          <span className="text-[11px] text-amber-400 font-semibold">{srv.promo_days}</span>
                         </>
                       )}
                     </div>
@@ -734,20 +777,20 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
                 <div className="text-right shrink-0">
                   {isPromo ? (
                     <div>
-                      <span className="text-[11px] text-zinc-500 line-through block">
+                      <span className="text-xs text-zinc-500 line-through block">
                         R$ {Number(srv.price).toFixed(2)}
                       </span>
-                      <span className="font-extrabold text-sm sm:text-base text-amber-400 block">
+                      <span className="font-extrabold text-base sm:text-lg text-amber-400 block">
                         R$ {finalPrice.toFixed(2)}
                       </span>
                     </div>
                   ) : (
-                    <span className="font-extrabold text-sm sm:text-base text-emerald-400 block">
+                    <span className="font-extrabold text-base sm:text-lg text-emerald-400 block">
                       R$ {Number(srv.price).toFixed(2)}
                     </span>
                   )}
                   
-                  <span className={`text-[10px] font-semibold mt-0.5 inline-block ${
+                  <span className={`text-[11px] font-semibold mt-0.5 inline-block ${
                     isSelected ? 'text-emerald-400' : 'text-zinc-500 group-hover:text-zinc-300'
                   }`}>
                     {isSelected ? '✓ Adicionado' : '+ Adicionar'}
@@ -761,12 +804,12 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
 
       {/* Barra Fixa Flutuante de Checkout quando há serviços selecionados */}
       {selectedServicesList.length > 0 ? (
-        <div className="sticky bottom-0 -mx-4 -mb-4 sm:-mx-6 sm:-mb-6 p-4 bg-zinc-900/95 backdrop-blur-xl border-t border-zinc-800 flex items-center justify-between z-20 rounded-b-3xl shadow-2xl mt-4">
+        <div className="sticky bottom-0 -mx-4 -mb-4 sm:-mx-7 sm:-mb-7 p-4 sm:p-5 bg-zinc-900/98 backdrop-blur-xl border-t border-zinc-800/90 flex items-center justify-between z-20 rounded-b-3xl shadow-2xl mt-5 safe-area-bottom">
           <div>
-            <p className="text-[11px] text-zinc-400 font-medium">
+            <p className="text-xs text-zinc-400 font-medium">
               {selectedServicesList.length} {selectedServicesList.length === 1 ? 'serviço' : 'serviços'} • {totalServicesDuration} min
             </p>
-            <p className="text-base font-extrabold text-emerald-400">
+            <p className="text-lg font-extrabold text-emerald-400">
               R$ {baseServicesPrice.toFixed(2)}
             </p>
           </div>
@@ -782,13 +825,13 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
                 setStep(2);
               }
             }}
-            className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold px-5 py-3 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+            className="min-h-[48px] bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-extrabold px-6 py-3 rounded-2xl text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all active:scale-95"
           >
             Avançar <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       ) : (
-        <div className="text-center py-2 text-[11px] text-zinc-500">
+        <div className="text-center py-2 text-xs text-zinc-500">
           Selecione ao menos um serviço para prosseguir com o agendamento.
         </div>
       )}
@@ -804,19 +847,19 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
           setDirection(1);
           setStep(3);
         }}
-        className={`w-full text-left p-3.5 rounded-2xl border transition-all duration-200 flex items-center justify-between
+        className={`w-full min-h-[56px] text-left p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between active:scale-[0.98]
           ${selectedProfessionalId === 'any' 
             ? 'bg-zinc-800 border-zinc-400 shadow-md ring-1 ring-white/20' 
-            : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/60'
+            : 'bg-zinc-900/60 border-zinc-800/80 hover:bg-zinc-800/60'
           }`}
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-300">
+          <div className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-300 shrink-0">
             <Sparkles className="w-4 h-4 text-amber-400" />
           </div>
           <div>
-            <h3 className="font-bold text-xs text-white">Qualquer Profissional</h3>
-            <p className="text-[10px] text-zinc-400">Primeiro horário disponível</p>
+            <h3 className="font-bold text-sm text-white">Qualquer Profissional</h3>
+            <p className="text-xs text-zinc-400">Primeiro horário disponível</p>
           </div>
         </div>
         <ArrowRight className="w-4 h-4 text-zinc-500" />
@@ -830,23 +873,23 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
             setDirection(1);
             setStep(3);
           }}
-          className={`w-full text-left p-3.5 rounded-2xl border transition-all duration-200 flex items-center justify-between
+          className={`w-full min-h-[56px] text-left p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between active:scale-[0.98]
             ${selectedProfessionalId === barber.id 
               ? 'bg-zinc-800 border-zinc-400 shadow-md ring-1 ring-white/20' 
-              : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/60'
+              : 'bg-zinc-900/60 border-zinc-800/80 hover:bg-zinc-800/60'
             }`}
         >
           <div className="flex items-center gap-3">
             {barber.avatar_url ? (
-              <img src={barber.avatar_url} alt={barber.full_name} className="w-10 h-10 rounded-xl object-cover" />
+              <img src={barber.avatar_url} alt={barber.full_name} className="w-11 h-11 rounded-xl object-cover border border-zinc-700 shrink-0" />
             ) : (
-              <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-300">
+              <div className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-300 shrink-0">
                 {barber.full_name.substring(0, 2).toUpperCase()}
               </div>
             )}
             <div>
-              <h3 className="font-bold text-xs text-white">{barber.full_name}</h3>
-              <p className="text-[10px] text-zinc-400 capitalize">{barber.role === 'owner' ? 'Especialista / Dono' : 'Barbeiro'}</p>
+              <h3 className="font-bold text-sm text-white">{barber.full_name}</h3>
+              <p className="text-xs text-zinc-400 capitalize">{barber.role === 'owner' ? 'Especialista / Dono' : 'Barbeiro'}</p>
             </div>
           </div>
           <ArrowRight className="w-4 h-4 text-zinc-500" />
@@ -858,7 +901,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
           setDirection(-1);
           setStep(1);
         }}
-        className="w-full text-xs text-zinc-400 hover:text-white py-1 flex items-center justify-center gap-1 transition-colors mt-2"
+        className="w-full min-h-[44px] text-xs sm:text-sm text-zinc-400 hover:text-white py-2 flex items-center justify-center gap-1.5 transition-colors mt-2 active:scale-95"
       >
         <ChevronLeft className="w-4 h-4" /> Voltar aos serviços
       </button>
@@ -870,22 +913,22 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
     <div className="space-y-4 w-full">
       {/* Banner do Profissional Selecionado com Opção de Trocar */}
       {selectedProfessional && !isSingleBarber && (
-        <div className="flex items-center justify-between bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3 shadow-sm">
+        <div className="flex items-center justify-between bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3 sm:p-3.5 shadow-sm">
           <div className="flex items-center gap-2.5 min-w-0">
             {selectedProfessional.avatar_url ? (
               <img 
                 src={selectedProfessional.avatar_url} 
                 alt={selectedProfessional.full_name} 
-                className="w-8 h-8 rounded-xl object-cover border border-zinc-700 aspect-square shrink-0" 
+                className="w-9 h-9 rounded-xl object-cover border border-zinc-700 aspect-square shrink-0" 
               />
             ) : (
-              <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-300 shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-300 shrink-0">
                 {selectedProfessional.full_name.substring(0, 2).toUpperCase()}
               </div>
             )}
             <div className="min-w-0">
               <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Barbeiro Selecionado</p>
-              <p className="text-xs font-bold text-white truncate">{selectedProfessional.full_name}</p>
+              <p className="text-xs sm:text-sm font-bold text-white truncate">{selectedProfessional.full_name}</p>
             </div>
           </div>
 
@@ -895,31 +938,31 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
               setDirection(-1);
               setStep(2);
             }}
-            className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl transition-colors shrink-0"
+            className="min-h-[36px] text-xs font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl transition-colors shrink-0 active:scale-95"
           >
-            Trocar Barbeiro
+            Trocar
           </button>
         </div>
       )}
 
       {/* Resumo rápido dos serviços selecionados */}
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-2.5 flex items-center justify-between text-xs">
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 flex items-center justify-between text-xs sm:text-sm">
         <span className="text-zinc-400">
-          {selectedServicesList.length} serviço(s) selecionado(s):
+          {selectedServicesList.length} serviço(s) marcado(s):
         </span>
-        <span className="font-bold text-white flex items-center gap-1">
-          <Clock className="w-3 h-3 text-emerald-400" />
-          {totalServicesDuration} minutos reservados
+        <span className="font-bold text-white flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5 text-emerald-400" />
+          {totalServicesDuration} min reservados
         </span>
       </div>
 
-      {/* Seletor Horizontal de Dias */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full scrollbar-none">
+      {/* Seletor Horizontal de Dias (Carrossel com Snap e Touch Target Amplo) */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 max-w-full scrollbar-none snap-x snap-mandatory -mx-2 px-2 sm:mx-0 sm:px-0">
         {dateOptions.map((opt, idx) => (
           <button
             key={idx}
             onClick={() => setSelectedDateIndex(idx)}
-            className={`flex-1 min-w-[64px] py-3 px-2 rounded-2xl border text-center transition-all duration-200 flex flex-col items-center justify-center
+            className={`min-w-[70px] sm:min-w-[76px] min-h-[58px] py-2.5 px-2 rounded-2xl border text-center transition-all duration-200 flex flex-col items-center justify-center snap-start active:scale-95 shrink-0
               ${selectedDateIndex === idx 
                 ? 'bg-white text-zinc-950 font-bold border-white shadow-lg' 
                 : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-400 hover:bg-zinc-800 hover:text-white'
@@ -928,30 +971,30 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
             <span className={`text-[10px] font-bold uppercase ${selectedDateIndex === idx ? 'text-zinc-950' : 'text-zinc-500'}`}>
               {opt.day}
             </span>
-            <span className="text-xs font-bold mt-0.5">{opt.date}</span>
+            <span className="text-xs sm:text-sm font-bold mt-0.5">{opt.date}</span>
           </button>
         ))}
       </div>
 
       {/* Grade de Horários */}
       <div className="pt-2">
-        <h3 className="text-xs font-bold text-zinc-300 mb-2 flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5 text-zinc-400" /> Horários Disponíveis
+        <h3 className="text-xs sm:text-sm font-bold text-zinc-300 mb-2.5 flex items-center gap-1.5">
+          <Clock className="w-4 h-4 text-zinc-400" /> Horários Disponíveis
         </h3>
 
         {loadingSlots ? (
           <div className="py-10 text-center flex flex-col items-center justify-center text-zinc-500">
-            <Loader2 className="w-5 h-5 animate-spin text-zinc-400 mb-2" />
-            <p className="text-xs">Buscando horários com vaga de {totalServicesDuration} min...</p>
+            <Loader2 className="w-6 h-6 animate-spin text-zinc-400 mb-2" />
+            <p className="text-xs sm:text-sm">Buscando horários com vaga de {totalServicesDuration} min...</p>
           </div>
         ) : availableSlots.length === 0 || availableSlots.filter(s => s.available).length === 0 ? (
           <div className="py-8 text-center border border-dashed border-zinc-800 rounded-2xl p-5 bg-zinc-950/40 space-y-3">
-            <Clock className="w-7 h-7 text-zinc-600 mx-auto" />
+            <Clock className="w-8 h-8 text-zinc-600 mx-auto" />
             <div>
-              <p className="text-xs font-bold text-zinc-200">
+              <p className="text-xs sm:text-sm font-bold text-zinc-200">
                 Sem horários livres {selectedProfessional ? `com ${selectedProfessional.full_name}` : ''} nesta data.
               </p>
-              <p className="text-[10px] text-zinc-500 mt-1 max-w-xs mx-auto">
+              <p className="text-[11px] sm:text-xs text-zinc-500 mt-1 max-w-xs mx-auto">
                 Você pode selecionar outro dia acima ou verificar a disponibilidade de outros barbeiros da equipe.
               </p>
             </div>
@@ -963,14 +1006,14 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
                   setDirection(-1);
                   setStep(2);
                 }}
-                className="bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors inline-flex items-center gap-1.5 border border-zinc-700 shadow-sm"
+                className="min-h-[44px] bg-zinc-800 hover:bg-zinc-700 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl transition-colors inline-flex items-center gap-1.5 border border-zinc-700 shadow-sm active:scale-95"
               >
-                <Users className="w-3.5 h-3.5 text-emerald-400" /> Ver Outros Barbeiros
+                <Users className="w-4 h-4 text-emerald-400" /> Ver Outros Barbeiros
               </button>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1">
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-60 overflow-y-auto pr-1">
             {availableSlots.map((slot, idx) => (
               <button
                 key={idx}
@@ -980,12 +1023,12 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
                   setDirection(1);
                   setStep(4);
                 }}
-                className={`py-2.5 rounded-xl text-xs font-semibold border transition-all
+                className={`min-h-[48px] py-3 rounded-xl text-sm font-bold border transition-all flex items-center justify-center active:scale-95
                   ${!slot.available 
                     ? 'bg-zinc-950/40 border-zinc-900 text-zinc-600 line-through cursor-not-allowed' 
                     : selectedSlot?.time === slot.time
-                      ? 'bg-emerald-500 text-zinc-950 font-bold border-emerald-400 shadow-sm'
-                      : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-200 hover:bg-zinc-800 hover:border-zinc-700'
+                      ? 'bg-emerald-500 text-zinc-950 font-bold border-emerald-400 shadow-md ring-2 ring-emerald-400/20'
+                      : 'bg-zinc-900/70 border-zinc-800/90 text-zinc-200 hover:bg-zinc-800 hover:border-zinc-700'
                   }`}
               >
                 {slot.time}
@@ -1004,7 +1047,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
             setStep(2);
           }
         }}
-        className="w-full text-xs text-zinc-400 hover:text-white py-1 flex items-center justify-center gap-1 transition-colors"
+        className="w-full min-h-[44px] text-xs sm:text-sm text-zinc-400 hover:text-white py-2 flex items-center justify-center gap-1.5 transition-colors active:scale-95"
       >
         <ChevronLeft className="w-4 h-4" /> Voltar
       </button>
@@ -1046,8 +1089,8 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
       {tenant.products_enabled !== false && products.length > 0 && (
         <div className="space-y-2.5 pt-1">
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-              <ShoppingBag className="w-3.5 h-3.5 text-purple-400" />
+            <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+              <ShoppingBag className="w-4 h-4 text-purple-400" />
               Deseja retirar algum produto no salão?
             </h4>
             <span className="text-[10px] text-zinc-500 font-medium">Opcional</span>
@@ -1059,23 +1102,23 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
               return (
                 <div 
                   key={prod.id}
-                  className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                  className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
                     qty > 0 
                       ? 'bg-purple-950/20 border-purple-500/40 shadow-sm' 
                       : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center overflow-hidden shrink-0">
+                    <div className="w-11 h-11 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center overflow-hidden shrink-0">
                       {prod.image_url ? (
                         <img src={prod.image_url} alt={prod.name} className="w-full h-full object-cover" />
                       ) : (
-                        <ShoppingBag className="w-4 h-4 text-zinc-600" />
+                        <ShoppingBag className="w-5 h-5 text-zinc-600" />
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-white truncate">{prod.name}</p>
-                      <p className="text-[11px] font-semibold text-purple-400">
+                      <p className="text-xs sm:text-sm font-bold text-white truncate">{prod.name}</p>
+                      <p className="text-xs font-semibold text-purple-400">
                         + R$ {Number(prod.price).toFixed(2)}
                       </p>
                     </div>
@@ -1090,27 +1133,27 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
                       <button
                         type="button"
                         onClick={() => toggleProductQuantity(prod.id, 1)}
-                        className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-bold transition-colors flex items-center gap-1 border border-zinc-700"
+                        className="min-h-[38px] px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition-all flex items-center gap-1 border border-zinc-700 active:scale-95"
                       >
-                        <Plus className="w-3 h-3" /> Adicionar
+                        <Plus className="w-3.5 h-3.5" /> Adicionar
                       </button>
                     ) : (
-                      <div className="flex items-center gap-1 bg-purple-500/20 border border-purple-500/30 rounded-lg p-0.5">
+                      <div className="flex items-center gap-1.5 bg-purple-500/20 border border-purple-500/30 rounded-xl p-1">
                         <button
                           type="button"
                           onClick={() => toggleProductQuantity(prod.id, -1)}
-                          className="w-6 h-6 rounded bg-zinc-900 text-zinc-300 flex items-center justify-center hover:bg-zinc-800 transition-colors"
+                          className="w-8 h-8 rounded-lg bg-zinc-900 text-zinc-300 flex items-center justify-center hover:bg-zinc-800 transition-colors active:scale-90"
                         >
-                          <Minus className="w-3 h-3" />
+                          <Minus className="w-3.5 h-3.5" />
                         </button>
-                        <span className="text-xs font-bold text-white px-1.5">{qty}</span>
+                        <span className="text-sm font-bold text-white px-2">{qty}</span>
                         <button
                           type="button"
                           disabled={prod.stock !== undefined && qty >= prod.stock}
                           onClick={() => toggleProductQuantity(prod.id, 1)}
-                          className="w-6 h-6 rounded bg-purple-600 text-white flex items-center justify-center hover:bg-purple-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center hover:bg-purple-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:scale-90"
                         >
-                          <Plus className="w-3 h-3" />
+                          <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     )}
@@ -1123,7 +1166,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
       )}
 
       {/* Resumo do Horário e Valores com Todos os Serviços */}
-      <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl p-4 text-xs space-y-2.5">
+      <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl p-4 text-xs sm:text-sm space-y-2.5">
         <div>
           <span className="text-zinc-500 block mb-1 font-semibold text-[10px] uppercase tracking-wider">
             Serviço(s) Contratado(s) ({selectedServicesList.length}):
@@ -1184,7 +1227,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
 
         <div className="flex justify-between pt-1">
           <span className="text-zinc-400 font-bold">Valor Total:</span>
-          <span className="font-extrabold text-emerald-400 text-sm">
+          <span className="font-extrabold text-emerald-400 text-base">
             {activeSubscription && isSubBooking && productsTotal === 0 && selectedServicesList.length === 1 ? (
               <span className="text-amber-400 font-bold">R$ 0,00 (Plano VIP)</span>
             ) : (
@@ -1194,40 +1237,46 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         </div>
       </div>
 
-      {/* Formulário do Cliente */}
-      <div className="space-y-3">
+      {/* Formulário do Cliente com Altura 48px e Fonte 16px para iOS */}
+      <div className="space-y-3.5">
         <div>
-          <label className="text-xs text-zinc-400 font-semibold block mb-1">Seu Nome Completo *</label>
+          <label className="text-xs sm:text-sm text-zinc-400 font-semibold block mb-1.5">Seu Nome Completo *</label>
           <input 
             type="text" 
             required
+            autoComplete="name"
             value={clientName}
             onChange={(e) => setClientName(e.target.value)}
             placeholder="Ex: Igor Nogueira"
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+            className="w-full min-h-[48px] bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-base text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
           />
         </div>
 
         <div>
-          <label className="text-xs text-zinc-400 font-semibold block mb-1">Seu WhatsApp / Celular *</label>
+          <label className="text-xs sm:text-sm text-zinc-400 font-semibold block mb-1.5">Seu WhatsApp / Celular *</label>
           <input 
             type="tel" 
+            inputMode="tel"
+            autoComplete="tel"
             required
             value={clientPhone}
             onChange={(e) => setClientPhone(e.target.value)}
-            placeholder="(11) 99999-8888"
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+            placeholder="(19) 98170-4277"
+            className="w-full min-h-[48px] bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-base text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
           />
           {hasRememberedClient && (
-            <span className="text-[10px] text-zinc-500 mt-1 block">
+            <span className="text-[11px] sm:text-xs text-zinc-400 mt-1 block">
               ✓ Dados lembrados do seu último agendamento neste aparelho.
             </span>
           )}
         </div>
+
+        {/* Widget Cloudflare Turnstile Anti-Robô (Carregado se VITE_TURNSTILE_SITE_KEY configurado) */}
+        <div id="cf-turnstile-container" className="flex justify-center py-1" />
       </div>
 
       {errorMessage && (
-        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex items-center gap-2">
+        <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs sm:text-sm flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{errorMessage}</span>
         </div>
@@ -1237,10 +1286,10 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         <button
           onClick={handleConfirm}
           disabled={isSubmitting || !clientName.trim() || !clientPhone.trim()}
-          className="w-full bg-white text-zinc-950 hover:bg-zinc-200 font-bold py-3.5 px-4 rounded-2xl text-xs transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+          className="w-full min-h-[52px] bg-white text-zinc-950 hover:bg-zinc-200 font-extrabold py-3.5 px-4 rounded-2xl text-sm sm:text-base transition-all flex items-center justify-center gap-2 shadow-xl active:scale-[0.98] disabled:opacity-50"
         >
           {isSubmitting ? (
-            <><Loader2 className="w-4 h-4 animate-spin" /> Confirmando Horário...</>
+            <><Loader2 className="w-5 h-5 animate-spin" /> Confirmando Horário...</>
           ) : (
             <>Finalizar Agendamento <ArrowRight className="w-4 h-4" /></>
           )}
@@ -1251,7 +1300,7 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
             setDirection(-1);
             setStep(3);
           }}
-          className="w-full text-xs text-zinc-400 hover:text-white py-1.5 flex items-center justify-center gap-1 transition-colors"
+          className="w-full min-h-[44px] text-xs sm:text-sm text-zinc-400 hover:text-white py-2 flex items-center justify-center gap-1.5 transition-colors active:scale-95"
         >
           <ChevronLeft className="w-4 h-4" /> Alterar Horário
         </button>
@@ -1260,10 +1309,10 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
   );
 
   return (
-    <div className="min-h-screen bg-zinc-950 font-sans text-zinc-50 flex flex-col items-center justify-between selection:bg-zinc-800 selection:text-white pb-12">
+    <div className="min-h-screen bg-zinc-950 font-sans text-zinc-50 flex flex-col items-center justify-between selection:bg-zinc-800 selection:text-white max-w-full overflow-x-hidden pb-[max(2rem,env(safe-area-inset-bottom))]">
       
-      {/* Header White-Label da Barbearia */}
-      <header className="w-full max-w-xl px-6 pt-10 pb-6 flex flex-col items-center justify-center text-center">
+      {/* Header White-Label da Barbearia com Safe Area Top */}
+      <header className="w-full max-w-xl px-4 sm:px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-5 flex flex-col items-center justify-center text-center">
         {tenant.logo_url ? (
           <img 
             src={tenant.logo_url} 
@@ -1276,22 +1325,22 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
             <Scissors className="w-6 h-6 text-zinc-100" strokeWidth={1.5} />
           </div>
         )}
-        <h1 className="text-2xl font-bold tracking-tight text-white mb-1">{tenant.name}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-1">{tenant.name}</h1>
         {tenant.address && (
-          <p className="text-xs text-zinc-400 flex items-center justify-center gap-1">
+          <p className="text-xs sm:text-sm text-zinc-400 flex items-center justify-center gap-1.5 px-2">
             <MapPin className="w-3.5 h-3.5 text-zinc-500 shrink-0" /> {tenant.address}
           </p>
         )}
         {tenant.phone && (
-          <p className="text-[11px] text-zinc-500 flex items-center justify-center gap-1 mt-0.5">
-            <Phone className="w-3 h-3 text-zinc-600 shrink-0" /> {tenant.phone}
+          <p className="text-xs text-zinc-500 flex items-center justify-center gap-1 mt-1">
+            <Phone className="w-3.5 h-3.5 text-zinc-600 shrink-0" /> {tenant.phone}
           </p>
         )}
       </header>
 
       {/* Container Principal do Wizard (sem overflow-hidden restritivo para permitir scroll natural fluido) */}
-      <main className="w-full max-w-md px-4 flex-1 flex flex-col justify-start">
-        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-5 sm:p-7 backdrop-blur-xl relative shadow-2xl flex flex-col">
+      <main className="w-full max-w-md px-3 sm:px-4 flex-1 flex flex-col justify-start">
+        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-4 sm:p-7 backdrop-blur-xl relative shadow-2xl flex flex-col max-w-full">
           
           {/* Header de Progresso Dinâmico */}
           <div className="flex items-center justify-between mb-5 shrink-0">
@@ -1299,14 +1348,14 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
               <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-0.5">
                 Passo {currentDisplayStep} de {totalDisplaySteps}
               </p>
-              <h2 className="text-base font-bold text-white">{getStepTitle()}</h2>
+              <h2 className="text-base sm:text-lg font-bold text-white">{getStepTitle()}</h2>
             </div>
             
             <div className="flex gap-1.5">
               {Array.from({ length: totalDisplaySteps }, (_, i) => i + 1).map((i) => (
                 <div 
                   key={i} 
-                  className={`h-1 rounded-full transition-all duration-300 ${
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
                     i === currentDisplayStep ? 'w-5 bg-white' : i < currentDisplayStep ? 'w-2 bg-zinc-500' : 'w-2 bg-zinc-800'
                   }`}
                 />
@@ -1338,22 +1387,16 @@ export default function RazorCloudBookingPage({ slug = 'ferreirabarber' }: Booki
         </div>
       </main>
 
-      {/* Footer com Créditos do Desenvolvedor */}
-      <footer className="w-full text-center pt-8 pb-4 text-[11px] text-zinc-500 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+      {/* Footer */}
+      <footer className="w-full text-center pt-8 pb-4 text-[11px] sm:text-xs text-zinc-500 flex flex-wrap items-center justify-center gap-2">
         <span>© {tenant.name}</span>
         <span className="text-zinc-700">•</span>
-        <span className="flex items-center gap-1 text-zinc-400">
-          Site desenvolvido por{' '}
-          <a 
-            href="https://instagram.com/ferreiraatheone" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-white hover:text-pink-400 font-semibold inline-flex items-center gap-1 transition-colors underline-offset-2 hover:underline"
-          >
-            <Instagram className="w-3.5 h-3.5 text-pink-500" />
-            @ferreiraatheone
-          </a>
-        </span>
+        <a 
+          href="/#/admin" 
+          className="text-zinc-500 hover:text-zinc-300 transition-colors py-1"
+        >
+          Acesso da Equipe
+        </a>
       </footer>
     </div>
   );

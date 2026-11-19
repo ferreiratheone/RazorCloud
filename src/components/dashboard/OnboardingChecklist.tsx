@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { 
-  CheckCircle2, 
-  Circle, 
-  ArrowRight, 
-  Sparkles, 
-  ChevronDown, 
-  ChevronUp, 
-  Share2, 
-  Copy, 
-  Check, 
+import {
+  CheckCircle2,
+  Circle,
+  ArrowRight,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  Share2,
+  Copy,
+  Check,
   ExternalLink,
   Globe
 } from 'lucide-react';
@@ -75,8 +75,8 @@ export function OnboardingChecklist({
   const completedCount = steps.filter(s => s.completed).length;
   const isAllDone = completedCount === steps.length;
 
-  const originUrl = typeof window !== 'undefined' ? window.location.origin : 'https://razorcloud.vercel.app';
-  const publicUrl = `${originUrl}/#/${organization.slug}`;
+  const originUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const publicUrl = `${originUrl}/#/`;
   const shareText = `💈 *Agende seu horário na ${organization.name}!*\n\nEscolha o serviço, barbeiro e horário de forma rápida pelo nosso site oficial:\n👉 ${publicUrl}`;
 
   function handleCopyLink() {
@@ -168,11 +168,10 @@ export function OnboardingChecklist({
             {steps.map((step) => (
               <div
                 key={step.id}
-                className={`p-3.5 rounded-xl border transition-all flex items-start gap-3 ${
-                  step.completed 
-                    ? 'bg-zinc-950/40 border-zinc-800/60' 
+                className={`p-3.5 rounded-xl border transition-all flex items-start gap-3 ${step.completed
+                    ? 'bg-zinc-950/40 border-zinc-800/60'
                     : 'bg-zinc-900/80 border-zinc-700 hover:border-zinc-500'
-                }`}
+                  }`}
               >
                 <div className="mt-0.5 shrink-0">
                   {step.completed ? (

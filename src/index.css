@@ -30,6 +30,23 @@
     touch-action: manipulation;
     background-color: #09090b;
     color: #fafafa;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Garante que campos de formulário permitam digitação e seleção de texto normal */
+  input, 
+  textarea, 
+  [contenteditable="true"] {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+  }
+
+  /* Prevenção de arraste e cópia de imagens */
+  img {
+    -webkit-user-drag: none;
+    user-select: none;
   }
 
   /* Remoção de atraso de 300ms e zoom em inputs */
@@ -41,12 +58,25 @@
     touch-action: manipulation;
   }
 
-  /* Previne zoom automático no Safari iOS em inputs de texto */
+  /* Previne zoom automático no Safari iOS em inputs de texto (WCAG / Apple HIG) */
   @media screen and (max-width: 768px) {
     input, select, textarea {
       font-size: 16px !important;
     }
   }
+}
+
+/* Ocultar barra de rolagem visual mantendo rolagem tátil suave no mobile */
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-none,
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Hardware accelerated transitions for low INP (Input Delay) */
@@ -56,11 +86,15 @@
   backface-visibility: hidden;
 }
 
-/* Utilitários de Safe Area do iOS */
+/* Utilitários de Safe Area do iOS / Android */
 .safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 16px);
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 16px));
 }
 
 .safe-area-top {
-  padding-top: env(safe-area-inset-top, 16px);
+  padding-top: max(1rem, env(safe-area-inset-top, 16px));
+}
+
+.safe-bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 12px);
 }

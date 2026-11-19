@@ -15,7 +15,8 @@ import {
   Crown,
   ChevronLeft,
   ChevronRight,
-  ShoppingBag
+  ShoppingBag,
+  X
 } from 'lucide-react';
 import { DataService, getLocalDateString } from '@/src/lib/data-service';
 import { OnboardingChecklist } from '../OnboardingChecklist';
@@ -557,8 +558,8 @@ export function AgendaTab({ organization, currentUser, onNavigateTab, onViewPubl
                       </div>
                     </div>
 
-                    {/* Botões de Ação Direta */}
-                    <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                    {/* Botões de Ação Direta Mobile-First (Zona de Toque Confortável) */}
+                    <div className="flex items-center gap-2 self-stretch sm:self-center justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800/80 shrink-0">
                       {/* Botão de Lembrete no WhatsApp */}
                       {apt.status === 'confirmed' && cleanPhone && (
                         <a 
@@ -566,9 +567,10 @@ export function AgendaTab({ organization, currentUser, onNavigateTab, onViewPubl
                           target="_blank"
                           rel="noopener noreferrer"
                           title="Enviar lembrete no WhatsApp do cliente"
-                          className="p-2 hover:bg-emerald-500/20 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg transition-colors flex items-center justify-center"
+                          className="h-11 px-3 sm:px-2.5 hover:bg-emerald-500/20 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl transition-all flex items-center justify-center gap-1.5 text-xs font-semibold active:scale-95"
                         >
                           <MessageCircle className="w-4 h-4" />
+                          <span className="sm:hidden">WhatsApp</span>
                         </a>
                       )}
 
@@ -577,9 +579,10 @@ export function AgendaTab({ organization, currentUser, onNavigateTab, onViewPubl
                         <button 
                           onClick={() => handleStatusChange(apt.id, 'completed')}
                           title="Marcar como atendido / concluído"
-                          className="p-2 hover:bg-emerald-500/10 text-zinc-400 hover:text-emerald-400 rounded-lg transition-colors border border-zinc-800 hover:border-emerald-500/30"
+                          className="h-11 px-3 sm:px-2.5 hover:bg-emerald-500/10 text-zinc-300 hover:text-emerald-400 bg-zinc-800/60 rounded-xl transition-all border border-zinc-700/60 flex items-center justify-center gap-1.5 text-xs font-semibold active:scale-95"
                         >
-                          <CheckCircle2 className="w-4 h-4" />
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span className="sm:hidden">Concluir</span>
                         </button>
                       )}
 
@@ -587,7 +590,7 @@ export function AgendaTab({ organization, currentUser, onNavigateTab, onViewPubl
                       <button 
                         onClick={() => handleDeleteAppointment(apt.id)}
                         title="Excluir agendamento (libera o horário)"
-                        className="p-2 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-colors border border-zinc-800 hover:border-red-500/30"
+                        className="h-11 w-11 sm:w-auto sm:px-2.5 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 bg-zinc-800/30 rounded-xl transition-all border border-zinc-800 flex items-center justify-center active:scale-95"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -600,11 +603,22 @@ export function AgendaTab({ organization, currentUser, onNavigateTab, onViewPubl
         )}
       </div>
 
-      {/* Modal de Novo Agendamento Manual (Encaixe) */}
+      {/* Modal de Novo Agendamento Manual (Bottom Sheet no Mobile) */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 className="text-lg font-bold text-white">Criar Agendamento Manual</h3>
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-zinc-700 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+            
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+              <h3 className="text-base sm:text-lg font-bold text-white">Criar Agendamento Manual</h3>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             
             <form onSubmit={handleCreateAppointment} className="space-y-3.5">
               <div>
@@ -615,7 +629,8 @@ export function AgendaTab({ organization, currentUser, onNavigateTab, onViewPubl
                   value={newClientName}
                   onChange={(e) => setNewClientName(e.target.value)}
                   placeholder="Ex: Carlos Santana"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                  autoComplete="name"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
                 />
               </div>
 
@@ -626,17 +641,19 @@ export function AgendaTab({ organization, currentUser, onNavigateTab, onViewPubl
                   value={newClientPhone}
                   onChange={(e) => setNewClientPhone(e.target.value)}
                   placeholder="(11) 99999-9999"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-zinc-400 font-medium block mb-1">Serviço</label>
                   <select 
                     value={newServiceId}
                     onChange={(e) => setNewServiceId(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-zinc-600"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-xs text-white focus:outline-none focus:border-zinc-500"
                   >
                     {services.map(s => (
                       <option key={s.id} value={s.id}>{s.name} (R$ {Number(s.price).toFixed(2)})</option>
@@ -649,7 +666,7 @@ export function AgendaTab({ organization, currentUser, onNavigateTab, onViewPubl
                   <select 
                     value={newBarberId}
                     onChange={(e) => setNewBarberId(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-zinc-600"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-xs text-white focus:outline-none focus:border-zinc-500"
                   >
                     {team.map(t => (
                       <option key={t.id} value={t.id}>{t.full_name}</option>
@@ -665,24 +682,24 @@ export function AgendaTab({ organization, currentUser, onNavigateTab, onViewPubl
                   required
                   value={newTime}
                   onChange={(e) => setNewTime(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-600"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 min-h-[48px] text-base sm:text-sm text-white focus:outline-none focus:border-zinc-500"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+              <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-3 border-t border-zinc-800/80">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
+                  className="w-full sm:flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold min-h-[48px] rounded-xl transition-all active:scale-95"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isCreating}
-                  className="bg-white text-zinc-950 hover:bg-zinc-200 font-bold px-4 py-2 rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                  className="w-full sm:flex-1 bg-white text-zinc-950 hover:bg-zinc-200 font-bold text-sm min-h-[48px] rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 active:scale-95"
                 >
-                  {isCreating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Agendar Horário
                 </button>
               </div>

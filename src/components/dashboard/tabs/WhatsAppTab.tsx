@@ -60,7 +60,7 @@ export function WhatsAppTab({ organization }: WhatsAppTabProps) {
         </div>
 
         <p className="text-xs text-zinc-300 leading-relaxed">
-          Você <strong>não precisa investir em chaves de API pagas</strong> agora. O RazorCloud já possui recursos nativos integrados ao WhatsApp que funcionam diretamente no seu celular ou WhatsApp Web sem custo algum:
+          Você <strong>não precisa investir em chaves de API pagas</strong> agora. O sistema já possui recursos nativos integrados ao WhatsApp que funcionam diretamente no seu celular ou WhatsApp Web sem custo algum:
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">

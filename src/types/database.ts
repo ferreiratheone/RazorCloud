@@ -30,6 +30,8 @@ export interface UserProfile {
   rating?: number;
   phone?: string;
   active?: boolean;
+  access_password?: string;
+  password_changes_count?: number;
   created_at?: string;
   updated_at?: string;
 }
