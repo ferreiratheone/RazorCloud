@@ -16,6 +16,9 @@ import type {
 
 const LOCAL_STORAGE_KEY_PREFIX = 'fratres_';
 
+export const PRIMARY_ORGANIZATION_ID = '02f3cc71-2747-496b-a241-20dfbae56d32';
+export const PRIMARY_ORGANIZATION_SLUG = 'fratresbarbearia';
+
 export function getLocalDateString(dateInput: string | Date): string {
   const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
   const year = d.getFullYear();
@@ -192,14 +195,44 @@ export const DataService = {
       try {
         // Seleção segura de colunas públicas (omite whatsapp_api_token de visitantes anônimos)
         const publicOrgCols = 'id, name, slug, address, phone, logo_url, plans_enabled, products_enabled, whatsapp_auto_enabled, whatsapp_reminder_hours, whatsapp_msg_confirmation, whatsapp_msg_reminder, created_at, updated_at';
+        
+        const targetSlug = slug || PRIMARY_ORGANIZATION_SLUG;
         const { data, error } = await supabase
           .from('organizations')
           .select(publicOrgCols)
-          .eq('slug', slug)
+          .eq('slug', targetSlug)
           .maybeSingle();
 
         if (data && !error) {
+          setLocalData('current_org', data);
+          setLocalData('org_' + data.id, data);
           return data as Organization;
+        }
+
+        // Se buscou pelo slug e não encontrou, busca diretamente a organização principal (Fratres Barbearia)
+        const { data: mainOrg } = await supabase
+          .from('organizations')
+          .select(publicOrgCols)
+          .eq('id', PRIMARY_ORGANIZATION_ID)
+          .maybeSingle();
+
+        if (mainOrg) {
+          setLocalData('current_org', mainOrg);
+          setLocalData('org_' + mainOrg.id, mainOrg);
+          return mainOrg as Organization;
+        }
+
+        // Fallback: pega a primeira organização cadastrada no banco
+        const { data: firstOrg } = await supabase
+          .from('organizations')
+          .select(publicOrgCols)
+          .limit(1)
+          .maybeSingle();
+
+        if (firstOrg) {
+          setLocalData('current_org', firstOrg);
+          setLocalData('org_' + firstOrg.id, firstOrg);
+          return firstOrg as Organization;
         }
       } catch (e) {
         console.warn('Erro ao buscar org por slug no Supabase:', e);
@@ -210,26 +243,34 @@ export const DataService = {
     if (allOrgs[slug]) return allOrgs[slug];
 
     const currentOrg = getLocalData<Organization | null>('current_org', null);
-    if (currentOrg && currentOrg.slug === slug) return currentOrg;
+    if (currentOrg) return currentOrg;
 
     return null;
   },
 
   async getOrganization(orgId: string): Promise<Organization | null> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
+    const targetId = isUuid ? orgId : PRIMARY_ORGANIZATION_ID;
+
     if (isSupabaseConfigured()) {
       try {
         const fullOrgCols = 'id, name, slug, address, phone, logo_url, plans_enabled, products_enabled, whatsapp_auto_enabled, whatsapp_api_url, whatsapp_api_instance, whatsapp_api_token, whatsapp_reminder_hours, whatsapp_msg_confirmation, whatsapp_msg_reminder, created_at, updated_at';
         const { data, error } = await supabase
           .from('organizations')
           .select(fullOrgCols)
-          .eq('id', orgId)
-          .single();
-        if (data && !error) return data as Organization;
+          .eq('id', targetId)
+          .maybeSingle();
+
+        if (data && !error) {
+          setLocalData('current_org', data);
+          setLocalData('org_' + data.id, data);
+          return data as Organization;
+        }
       } catch (e) {}
     }
 
     const currentOrg = getLocalData<Organization | null>('current_org', null);
-    if (currentOrg && currentOrg.id === orgId) return currentOrg;
+    if (currentOrg) return currentOrg;
     return null;
   },
 
@@ -302,7 +343,9 @@ export const DataService = {
 
   // --- SERVIÇOS DO CATÁLOGO ---
   async getServices(orgId: string): Promise<Service[]> {
-    const localList = getLocalData<Service[]>('services_' + orgId, []);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
+    const targetOrgId = isUuid ? orgId : PRIMARY_ORGANIZATION_ID;
+    const localList = getLocalData<Service[]>('services_' + targetOrgId, []);
     const localMap = new Map<string, Partial<Service>>();
     localList.forEach(ls => {
       if (ls && ls.id) localMap.set(ls.id, ls);
@@ -310,36 +353,33 @@ export const DataService = {
 
     if (isSupabaseConfigured()) {
       try {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
-        if (isUuid) {
-          const { data, error } = await supabase
-            .from('services')
-            .select('id, organization_id, name, description, price, duration, active, category, is_promotional, promotional_price, promo_days, created_at, updated_at')
-            .eq('organization_id', orgId)
-            .order('name', { ascending: true });
+        const { data, error } = await supabase
+          .from('services')
+          .select('id, organization_id, name, description, price, duration, active, created_at, updated_at')
+          .eq('organization_id', targetOrgId)
+          .order('name', { ascending: true });
 
-          if (!error && Array.isArray(data)) {
-            const enriched: Service[] = data.map((srv: any) => {
-              const local = localMap.get(srv.id);
-              const category = srv.category || local?.category || getNormalizedCategory(srv);
-              const is_promotional = Boolean(srv.is_promotional ?? local?.is_promotional ?? false);
-              const promotional_price = srv.promotional_price !== undefined && srv.promotional_price !== null && srv.promotional_price !== ''
-                ? Number(srv.promotional_price)
-                : (local?.promotional_price !== undefined && local?.promotional_price !== null ? Number(local.promotional_price) : null);
-              const promo_days = srv.promo_days || local?.promo_days || null;
+        if (!error && Array.isArray(data)) {
+          const enriched: Service[] = data.map((srv: any) => {
+            const local = localMap.get(srv.id);
+            const category = srv.category || local?.category || getNormalizedCategory(srv);
+            const is_promotional = Boolean(srv.is_promotional ?? local?.is_promotional ?? false);
+            const promotional_price = srv.promotional_price !== undefined && srv.promotional_price !== null && srv.promotional_price !== ''
+              ? Number(srv.promotional_price)
+              : (local?.promotional_price !== undefined && local?.promotional_price !== null ? Number(local.promotional_price) : null);
+            const promo_days = srv.promo_days || local?.promo_days || null;
 
-              return {
-                ...srv,
-                category,
-                is_promotional,
-                promotional_price,
-                promo_days,
-              };
-            });
+            return {
+              ...srv,
+              category,
+              is_promotional,
+              promotional_price,
+              promo_days,
+            };
+          });
 
-            setLocalData('services_' + orgId, enriched);
-            return enriched;
-          }
+          setLocalData('services_' + targetOrgId, enriched);
+          return enriched;
         }
       } catch (e) {
         console.warn('Erro ao buscar serviços no Supabase:', e);
@@ -470,28 +510,28 @@ export const DataService = {
 
   // --- PRODUTOS E VITRINE DE ADICIONAIS ---
   async getProducts(orgId: string): Promise<Product[]> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
+    const targetOrgId = isUuid ? orgId : PRIMARY_ORGANIZATION_ID;
+
     if (isSupabaseConfigured()) {
       try {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
-        if (isUuid) {
-          const { data, error } = await supabase
-            .from('products')
-            .select('id, organization_id, name, description, price, category, image_url, stock, active, created_at, updated_at')
-            .eq('organization_id', orgId)
-            .order('name', { ascending: true });
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, organization_id, name, description, price, category, image_url, stock, active, created_at, updated_at')
+          .eq('organization_id', targetOrgId)
+          .order('name', { ascending: true });
 
-          if (!error && Array.isArray(data)) {
-            setLocalData('products_' + orgId, data);
-            return data as Product[];
-          }
+        if (!error && Array.isArray(data)) {
+          setLocalData('products_' + targetOrgId, data);
+          return data as Product[];
         }
       } catch (e) {
         console.warn('Erro ao carregar produtos do Supabase:', e);
       }
     }
 
-    const fallback = DEFAULT_PRODUCTS_FACTORY(orgId);
-    return getLocalData<Product[]>('products_' + orgId, fallback);
+    const fallback = DEFAULT_PRODUCTS_FACTORY(targetOrgId);
+    return getLocalData<Product[]>('products_' + targetOrgId, fallback);
   },
 
   async saveProduct(product: Omit<Product, 'id'> & { id?: string }): Promise<Product> {
@@ -598,29 +638,49 @@ export const DataService = {
 
   // --- EQUIPE DE BARBEIROS ---
   async getTeam(orgId: string): Promise<UserProfile[]> {
-    const localList = getLocalData<UserProfile[]>('team_' + orgId, []);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
+    const targetOrgId = isUuid ? orgId : PRIMARY_ORGANIZATION_ID;
+    const localList = getLocalData<UserProfile[]>('team_' + targetOrgId, []);
 
     if (isSupabaseConfigured()) {
       try {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
-        if (isUuid) {
-          // Projeção segura: omite access_password da listagem geral da equipe
-          const { data, error } = await supabase
-            .from('users')
-            .select('id, organization_id, email, full_name, role, avatar_url, phone, rating, active, password_changes_count, created_at, updated_at')
-            .eq('organization_id', orgId)
-            .order('role', { ascending: true });
+        // 1. Tenta buscar da tabela users (se autenticado no painel administrativo)
+        const { data: usersData, error: usersErr } = await supabase
+          .from('users')
+          .select('id, organization_id, email, full_name, role, avatar_url, phone, rating, active, password_changes_count, created_at, updated_at')
+          .eq('organization_id', targetOrgId)
+          .order('role', { ascending: true });
 
-          if (!error && Array.isArray(data)) {
-            const map = new Map<string, UserProfile>();
-            for (const b of localList) map.set(b.id, b);
-            for (const b of (data as UserProfile[])) map.set(b.id, b);
-            const merged = Array.from(map.values());
-            if (merged.length > 0) {
-              setLocalData('team_' + orgId, merged);
-              return merged;
-            }
+        if (!usersErr && Array.isArray(usersData) && usersData.length > 0) {
+          const map = new Map<string, UserProfile>();
+          for (const b of localList) map.set(b.id, b);
+          for (const b of (usersData as UserProfile[])) map.set(b.id, b);
+          const merged = Array.from(map.values());
+          setLocalData('team_' + targetOrgId, merged);
+          return merged;
+        }
+
+        // 2. Se for visitante anônimo (cliente agendando onde a tabela users é protegida por RLS),
+        // consulta diretamente a View pública segura barbeiros_publicos
+        const { data: pubData, error: pubErr } = await supabase
+          .from('barbeiros_publicos')
+          .select('id, organization_id, full_name, role, avatar_url, rating, active')
+          .eq('organization_id', targetOrgId);
+
+        if (!pubErr && Array.isArray(pubData) && pubData.length > 0) {
+          const map = new Map<string, UserProfile>();
+          for (const b of localList) map.set(b.id, b);
+          for (const b of pubData) {
+            map.set(b.id, {
+              ...b,
+              email: '',
+              phone: '',
+              created_at: new Date().toISOString(),
+            });
           }
+          const merged = Array.from(map.values());
+          setLocalData('team_' + targetOrgId, merged);
+          return merged;
         }
       } catch (e) {
         console.warn('Erro ao carregar equipe do Supabase:', e);
@@ -1029,35 +1089,34 @@ export const DataService = {
 
   // --- HORÁRIOS DE FUNCIONAMENTO & ESCALAS INDIVIDUAIS ---
   async getSchedules(orgId: string, userId?: string | null): Promise<Schedule[]> {
-    const cacheKey = `schedules_${orgId}_${userId || 'general'}`;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
+    const targetOrgId = isUuid ? orgId : PRIMARY_ORGANIZATION_ID;
+    const cacheKey = `schedules_${targetOrgId}_${userId || 'general'}`;
     const localList = getLocalData<Schedule[]>(cacheKey, []);
 
     if (isSupabaseConfigured()) {
       try {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
-        if (isUuid) {
-          let query = supabase
-            .from('schedules')
-            .select('id, organization_id, user_id, day_of_week, start_time, end_time, is_closed, has_break, break_start, break_end, slot_interval, created_at')
-            .eq('organization_id', orgId);
+        let query = supabase
+          .from('schedules')
+          .select('id, organization_id, user_id, day_of_week, start_time, end_time, is_closed, has_break, break_start, break_end, slot_interval, created_at')
+          .eq('organization_id', targetOrgId);
 
-          if (userId) {
-            query = query.eq('user_id', userId);
-          } else {
-            query = query.is('user_id', null);
-          }
+        if (userId) {
+          query = query.eq('user_id', userId);
+        } else {
+          query = query.is('user_id', null);
+        }
 
-          const { data, error } = await query.order('day_of_week', { ascending: true });
+        const { data, error } = await query.order('day_of_week', { ascending: true });
 
-          if (!error && Array.isArray(data) && data.length > 0) {
-            const formatted = (data as Schedule[]).map(s => ({
-              ...s,
-              has_break: Boolean(s.has_break),
-              is_closed: Boolean(s.is_closed),
-            }));
-            setLocalData(cacheKey, formatted);
-            return formatted;
-          }
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const formatted = (data as Schedule[]).map(s => ({
+            ...s,
+            has_break: Boolean(s.has_break),
+            is_closed: Boolean(s.is_closed),
+          }));
+          setLocalData(cacheKey, formatted);
+          return formatted;
         }
       } catch (e) {
         console.warn('Erro ao buscar horários no Supabase:', e);
@@ -1068,10 +1127,10 @@ export const DataService = {
       return localList;
     }
 
-    const fallback = DEFAULT_SCHEDULES_FACTORY(orgId).map(s => ({
+    const fallback = DEFAULT_SCHEDULES_FACTORY(targetOrgId).map(s => ({
       ...s,
       user_id: userId || null,
-      id: `sch-${s.day_of_week}-${orgId}-${userId || 'general'}`
+      id: `sch-${s.day_of_week}-${targetOrgId}-${userId || 'general'}`
     }));
     return fallback;
   },
@@ -1477,28 +1536,28 @@ export const DataService = {
 
   // --- PLANOS MENSAIS E ASSINATURAS (CLUBE VIP) ---
   async getPlans(orgId: string): Promise<MembershipPlan[]> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
+    const targetOrgId = isUuid ? orgId : PRIMARY_ORGANIZATION_ID;
+
     if (isSupabaseConfigured()) {
       try {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId);
-        if (isUuid) {
-          const { data, error } = await supabase
-            .from('membership_plans')
-            .select('id, organization_id, name, description, price, cuts_per_month, active, created_at')
-            .eq('organization_id', orgId)
-            .order('price', { ascending: true });
+        const { data, error } = await supabase
+          .from('membership_plans')
+          .select('id, organization_id, name, description, price, cuts_per_month, active, created_at')
+          .eq('organization_id', targetOrgId)
+          .order('price', { ascending: true });
 
-          if (!error && Array.isArray(data)) {
-            setLocalData('plans_' + orgId, data);
-            return data as MembershipPlan[];
-          }
+        if (!error && Array.isArray(data)) {
+          setLocalData('plans_' + targetOrgId, data);
+          return data as MembershipPlan[];
         }
       } catch (e) {
         console.warn('Erro ao carregar planos do Supabase:', e);
       }
     }
 
-    const fallback = DEFAULT_PLANS_FACTORY(orgId);
-    return getLocalData<MembershipPlan[]>('plans_' + orgId, fallback);
+    const fallback = DEFAULT_PLANS_FACTORY(targetOrgId);
+    return getLocalData<MembershipPlan[]>('plans_' + targetOrgId, fallback);
   },
 
   async savePlan(plan: Omit<MembershipPlan, 'id'> & { id?: string }): Promise<MembershipPlan> {
