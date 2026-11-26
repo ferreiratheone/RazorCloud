@@ -14,6 +14,7 @@ import {
   Check,
   Eye,
   EyeOff,
+  Sparkles,
   X
 } from 'lucide-react';
 import { DataService } from '@/src/lib/data-service';
@@ -80,6 +81,11 @@ export function TeamTab({ organization }: TeamTabProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Desconto Promocional do Barbeiro (Iniciante / Júnior)
+  const [discountType, setDiscountType] = useState<'none' | 'percentage' | 'fixed'>('none');
+  const [discountValue, setDiscountValue] = useState<string>('0');
+  const [discountBadge, setDiscountBadge] = useState<string>('Barbeiro Júnior');
+
   // Credenciais geradas para envio fácil via WhatsApp
   const [justCreatedCreds, setJustCreatedCreds] = useState<{
     name: string;
@@ -115,6 +121,9 @@ export function TeamTab({ organization }: TeamTabProps) {
     setShowPassword(false);
     setRole('barber');
     setAvatarUrl('');
+    setDiscountType('none');
+    setDiscountValue('0');
+    setDiscountBadge('Barbeiro Júnior');
     setIsModalOpen(true);
   }
 
@@ -127,6 +136,9 @@ export function TeamTab({ organization }: TeamTabProps) {
     setShowPassword(false);
     setRole(member.role);
     setAvatarUrl(member.avatar_url || '');
+    setDiscountType(member.discount_type || 'none');
+    setDiscountValue(member.discount_value !== undefined && member.discount_value !== null ? String(member.discount_value) : '0');
+    setDiscountBadge(member.discount_badge || 'Barbeiro Júnior');
     setIsModalOpen(true);
   }
 
@@ -148,6 +160,7 @@ export function TeamTab({ organization }: TeamTabProps) {
 
     setIsSaving(true);
     try {
+      const discountVal = parseFloat(discountValue) || 0;
       if (editingMember) {
         const updated = await DataService.updateTeamMember(editingMember.id, {
           full_name: fullName.trim(),
@@ -156,6 +169,9 @@ export function TeamTab({ organization }: TeamTabProps) {
           password: password.trim() || undefined,
           role,
           avatar_url: avatarUrl.trim() || undefined,
+          discount_type: discountType,
+          discount_value: discountVal,
+          discount_badge: discountBadge.trim(),
         }, organization.id);
         setTeam(prev => prev.map(m => m.id === editingMember.id ? updated : m));
 
@@ -176,6 +192,9 @@ export function TeamTab({ organization }: TeamTabProps) {
           password: password.trim() || undefined,
           role,
           avatar_url: avatarUrl.trim() || undefined,
+          discount_type: discountType,
+          discount_value: discountVal,
+          discount_badge: discountBadge.trim(),
           active: true,
         });
         setTeam(prev => [created, ...prev.filter(m => m.id !== created.id)]);
@@ -270,6 +289,12 @@ export function TeamTab({ organization }: TeamTabProps) {
                     <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-medium capitalize shrink-0">
                       {member.role === 'owner' ? 'Proprietário' : 'Barbeiro'}
                     </span>
+                    {member.discount_type && member.discount_type !== 'none' && Number(member.discount_value) > 0 && (
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold shrink-0 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        {member.discount_badge || (member.discount_type === 'percentage' ? `${member.discount_value}% OFF` : `R$ ${member.discount_value} OFF`)}
+                      </span>
+                    )}
                   </div>
 
                   {member.phone && (
@@ -490,6 +515,89 @@ export function TeamTab({ organization }: TeamTabProps) {
                     {avatarUrl ? 'Trocar Foto' : 'Escolher Foto (PC / Celular)'}
                   </button>
                 </div>
+              </div>
+
+              {/* Seção de Preço Promocional do Barbeiro (Iniciante / Júnior) */}
+              <div className="p-4 bg-zinc-950/70 border border-zinc-800 rounded-2xl space-y-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <h4 className="text-xs sm:text-sm font-bold text-white">Preço Promocional (Desconto nos Atendimentos)</h4>
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Ideal para barbeiros recém-formados ou iniciantes que cobram um valor menor que a tabela oficial. O desconto é calculado automaticamente na hora do agendamento.
+                </p>
+
+                <div>
+                  <label className="text-xs text-zinc-400 font-medium block mb-1.5">Tipo de Desconto</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType('none')}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
+                        discountType === 'none'
+                          ? 'bg-zinc-800 text-white border-zinc-600 shadow-sm'
+                          : 'bg-zinc-950/60 text-zinc-400 border-zinc-800 hover:text-white'
+                      }`}
+                    >
+                      Nenhum
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType('percentage')}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
+                        discountType === 'percentage'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                          : 'bg-zinc-950/60 text-zinc-400 border-zinc-800 hover:text-white'
+                      }`}
+                    >
+                      Porcentagem (%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType('fixed')}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
+                        discountType === 'fixed'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                          : 'bg-zinc-950/60 text-zinc-400 border-zinc-800 hover:text-white'
+                      }`}
+                    >
+                      Valor Fixo (R$)
+                    </button>
+                  </div>
+                </div>
+
+                {discountType !== 'none' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-xs text-zinc-400 font-medium block mb-1">
+                        {discountType === 'percentage' ? 'Desconto em Porcentagem (%)' : 'Desconto em Reais (R$)'}
+                      </label>
+                      <input
+                        type="number"
+                        step={discountType === 'percentage' ? '1' : '0.50'}
+                        min="0.5"
+                        max={discountType === 'percentage' ? '90' : '300'}
+                        required
+                        value={discountValue}
+                        onChange={(e) => setDiscountValue(e.target.value)}
+                        placeholder={discountType === 'percentage' ? 'Ex: 20' : 'Ex: 10.00'}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-zinc-400 font-medium block mb-1">Texto do Selo no Site</label>
+                      <input
+                        type="text"
+                        required
+                        value={discountBadge}
+                        onChange={(e) => setDiscountBadge(e.target.value)}
+                        placeholder="Ex: Barbeiro Júnior"
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-3 border-t border-zinc-800/80">

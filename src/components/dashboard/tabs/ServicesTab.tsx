@@ -18,14 +18,17 @@ import {
 import { DataService } from '@/src/lib/data-service';
 import type { Organization, Service } from '@/src/types/database';
 import { APP_SERVICE_CATEGORIES, getNormalizedCategory, getCategoryBadge } from '@/src/lib/categories';
+import type { Organization, Service, UserProfile } from '@/src/types/database';
 
 interface ServicesTabProps {
   organization: Organization;
+  currentUser?: UserProfile;
 }
 
 export const SERVICE_CATEGORIES = APP_SERVICE_CATEGORIES;
 
-export function ServicesTab({ organization }: ServicesTabProps) {
+export function ServicesTab({ organization, currentUser }: ServicesTabProps) {
+  const isOwner = !currentUser || currentUser.role === 'owner' || currentUser.role === 'admin';
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -163,13 +166,29 @@ export function ServicesTab({ organization }: ServicesTabProps) {
           </p>
         </div>
 
-        <button 
-          onClick={handleOpenCreate}
-          className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm self-start sm:self-auto shrink-0"
-        >
-          <Plus className="w-4 h-4" /> Novo Serviço / Combo
-        </button>
+        {isOwner && (
+          <button 
+            onClick={handleOpenCreate}
+            className="bg-white text-zinc-950 hover:bg-zinc-200 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm self-start sm:self-auto shrink-0"
+          >
+            <Plus className="w-4 h-4" /> Novo Serviço / Combo
+          </button>
+        )}
       </div>
+
+      {!isOwner && (
+        <div className="p-4 bg-zinc-900/90 border border-zinc-800 rounded-2xl flex items-start gap-3 shadow-sm">
+          <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+            <AlertCircle className="w-4 h-4" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-amber-300">Tabela Geral da Fratres Barbearia (Somente Leitura)</h4>
+            <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+              Esta lista de preços é oficial e geral para toda a barbearia. Apenas a gerência/dono pode criar ou alterar serviços gerais. Se você for barbeiro júnior/iniciante e quiser oferecer um <strong>desconto promocional nos seus atendimentos</strong>, configure seu desconto pessoal em <strong>Minha Conta</strong> (ícone de chave no canto inferior da barra lateral).
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Barra de Filtros por Categoria */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
@@ -319,29 +338,37 @@ export function ServicesTab({ organization }: ServicesTabProps) {
                 </div>
 
                 <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50 mt-3 text-xs">
-                  <button
-                    onClick={() => handleToggleActive(srv)}
-                    className={`text-[11px] font-medium transition-colors ${srv.active ? 'text-zinc-400 hover:text-zinc-200' : 'text-emerald-400'}`}
-                  >
-                    {srv.active ? 'Desativar' : 'Ativar Serviço'}
-                  </button>
+                  {isOwner ? (
+                    <button
+                      onClick={() => handleToggleActive(srv)}
+                      className={`text-[11px] font-medium transition-colors ${srv.active ? 'text-zinc-400 hover:text-zinc-200' : 'text-emerald-400'}`}
+                    >
+                      {srv.active ? 'Desativar' : 'Ativar Serviço'}
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-zinc-500 font-medium">
+                      {srv.active ? 'Ativo na Vitrine' : 'Indisponível'}
+                    </span>
+                  )}
 
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={() => handleOpenEdit(srv)}
-                      className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
-                      title="Editar"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(srv.id)}
-                      className="p-1.5 text-zinc-400 hover:text-red-400 rounded-lg hover:bg-zinc-800 transition-colors"
-                      title="Excluir"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {isOwner && (
+                    <div className="flex items-center gap-1">
+                      <button 
+                        onClick={() => handleOpenEdit(srv)}
+                        className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                        title="Editar"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(srv.id)}
+                        className="p-1.5 text-zinc-400 hover:text-red-400 rounded-lg hover:bg-zinc-800 transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );

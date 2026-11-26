@@ -32,6 +32,10 @@ export interface UserProfile {
   active?: boolean;
   access_password?: string;
   password_changes_count?: number;
+  // Desconto Promocional do Barbeiro
+  discount_type?: 'none' | 'percentage' | 'fixed';
+  discount_value?: number;
+  discount_badge?: string;
   created_at?: string;
   updated_at?: string;
 }

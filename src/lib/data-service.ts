@@ -78,7 +78,7 @@ export const DataService = {
 
           // 1. Buscar perfil do usuário no Supabase com projeção explícita de colunas
           let userProfile: any = null;
-          const userCols = 'id, auth_user_id, organization_id, email, full_name, role, avatar_url, phone, rating, active, access_password, password_changes_count, created_at, updated_at';
+          const userCols = 'id, auth_user_id, organization_id, email, full_name, role, avatar_url, phone, rating, active, access_password, password_changes_count, discount_type, discount_value, discount_badge, created_at, updated_at';
           const { data: profileByAuth } = await supabase
             .from('users')
             .select(userCols)
@@ -647,7 +647,7 @@ export const DataService = {
         // 1. Tenta buscar da tabela users (se autenticado no painel administrativo)
         const { data: usersData, error: usersErr } = await supabase
           .from('users')
-          .select('id, organization_id, email, full_name, role, avatar_url, phone, rating, active, password_changes_count, created_at, updated_at')
+          .select('id, organization_id, email, full_name, role, avatar_url, phone, rating, active, password_changes_count, discount_type, discount_value, discount_badge, created_at, updated_at')
           .eq('organization_id', targetOrgId)
           .order('role', { ascending: true });
 
@@ -664,7 +664,7 @@ export const DataService = {
         // consulta diretamente a View pública segura barbeiros_publicos
         const { data: pubData, error: pubErr } = await supabase
           .from('barbeiros_publicos')
-          .select('id, organization_id, full_name, role, avatar_url, rating, active')
+          .select('id, organization_id, full_name, role, avatar_url, rating, active, discount_type, discount_value, discount_badge')
           .eq('organization_id', targetOrgId);
 
         if (!pubErr && Array.isArray(pubData) && pubData.length > 0) {
@@ -673,6 +673,9 @@ export const DataService = {
           for (const b of pubData) {
             map.set(b.id, {
               ...b,
+              discount_type: b.discount_type || 'none',
+              discount_value: Number(b.discount_value) || 0,
+              discount_badge: b.discount_badge || '',
               email: '',
               phone: '',
               created_at: new Date().toISOString(),
@@ -715,6 +718,9 @@ export const DataService = {
       active: barber.active ?? true,
       access_password: barber.access_password,
       password_changes_count: barber.password_changes_count ?? 0,
+      discount_type: barber.discount_type || 'none',
+      discount_value: Number(barber.discount_value) || 0,
+      discount_badge: barber.discount_badge || '',
       created_at: new Date().toISOString(),
     };
 
@@ -737,6 +743,9 @@ export const DataService = {
             avatar_url: barber.avatar_url || null,
             rating: Number(barber.rating) || 5.0,
             active: barber.active ?? true,
+            discount_type: barber.discount_type || 'none',
+            discount_value: Number(barber.discount_value) || 0,
+            discount_badge: barber.discount_badge || '',
           };
 
           if (barber.access_password !== undefined) {
@@ -807,6 +816,72 @@ export const DataService = {
         console.error('Erro ao excluir barbeiro no Supabase:', e);
       }
     }
+  },
+
+  async updateBarberDiscount(
+    userId: string,
+    orgId: string,
+    discount: {
+      discount_type: 'none' | 'percentage' | 'fixed';
+      discount_value: number;
+      discount_badge?: string;
+    }
+  ): Promise<{ success: boolean; error?: string }> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    const targetOrgId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId)
+      ? orgId
+      : PRIMARY_ORGANIZATION_ID;
+
+    // 1. Atualizar cache local
+    const team = getLocalData<UserProfile[]>('team_' + targetOrgId, []);
+    const updatedTeam = team.map(b => {
+      if (b.id === userId) {
+        return {
+          ...b,
+          discount_type: discount.discount_type,
+          discount_value: discount.discount_value,
+          discount_badge: discount.discount_badge || '',
+        };
+      }
+      return b;
+    });
+    setLocalData('team_' + targetOrgId, updatedTeam);
+
+    // Atualizar usuário salvo em sessão local se for o mesmo
+    const savedUser = getLocalData<UserProfile | null>('fratres_current_user', null);
+    if (savedUser && savedUser.id === userId) {
+      setLocalData('fratres_current_user', {
+        ...savedUser,
+        discount_type: discount.discount_type,
+        discount_value: discount.discount_value,
+        discount_badge: discount.discount_badge || '',
+      });
+    }
+
+    // 2. Persistir no Supabase
+    if (isSupabaseConfigured() && isUuid) {
+      try {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            discount_type: discount.discount_type,
+            discount_value: Number(discount.discount_value) || 0,
+            discount_badge: discount.discount_badge || '',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', userId);
+
+        if (error) {
+          console.warn('[UPDATE DISCOUNT ERROR]', error);
+          return { success: false, error: error.message };
+        }
+      } catch (err: any) {
+        console.warn('[UPDATE DISCOUNT THROW]', err);
+        return { success: false, error: err.message };
+      }
+    }
+
+    return { success: true };
   },
 
   async createTeamMember(member: Partial<UserProfile> & { organization_id: string; password?: string }): Promise<UserProfile> {

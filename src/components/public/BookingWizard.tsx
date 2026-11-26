@@ -343,7 +343,24 @@ export default function RazorCloudBookingPage({ slug = 'fratresbarbearia' }: Boo
     return services.filter(s => getNormalizedCategory(s) === wizardCategory);
   }, [services, wizardCategory]);
 
-  const finalTotalPrice = baseServicesPrice + productsTotal;
+  // Desconto exclusivo do Barbeiro Selecionado (ex: Barbeiro Júnior / Preço Promocional)
+  const barberDiscountAmount = useMemo(() => {
+    if (!selectedProfessional || !selectedProfessional.discount_type || selectedProfessional.discount_type === 'none') {
+      return 0;
+    }
+    const val = Number(selectedProfessional.discount_value) || 0;
+    if (val <= 0 || baseServicesPrice <= 0) return 0;
+
+    if (selectedProfessional.discount_type === 'percentage') {
+      return (baseServicesPrice * val) / 100;
+    }
+    if (selectedProfessional.discount_type === 'fixed') {
+      return Math.min(baseServicesPrice, val);
+    }
+    return 0;
+  }, [selectedProfessional, baseServicesPrice]);
+
+  const finalTotalPrice = Math.max(0, baseServicesPrice - barberDiscountAmount) + productsTotal;
 
   function toggleServiceSelection(srvId: string) {
     setSelectedServiceIds(prev => 
@@ -511,11 +528,15 @@ export default function RazorCloudBookingPage({ slug = 'fratresbarbearia' }: Boo
       ? `\n🛍️ *Produtos Adicionais:*\n` + selectedProductsList.map(p => `• ${p.quantity}x ${p.product.name} (R$ ${(p.product.price * p.quantity).toFixed(2)})`).join('\n')
       : '';
 
+    const discountText = barberDiscountAmount > 0
+      ? `\n🏷️ *Desconto ${selectedProfessional?.discount_badge || 'Profissional'}:* -R$ ${barberDiscountAmount.toFixed(2)}`
+      : '';
+
     const priceText = activeSubscription && isSubBooking && productsTotal === 0 && selectedServicesList.length === 1
       ? 'R$ 0,00 (Incluso no Plano VIP)'
       : `R$ ${finalTotalPrice.toFixed(2)}`;
 
-    const whatsappText = `💈 *Novo Agendamento Confirmado!*\n\n✂️ *Serviço(s):* ${servicesText} (${totalServicesDuration} min)\n💰 *Valor:* ${priceText}${productsText}\n📅 *Data:* ${dateOptions[selectedDateIndex]?.date} às ${selectedSlot?.time}\n👤 *Cliente:* ${clientName}\n📱 *WhatsApp:* ${clientPhone}\n💈 *Profissional:* ${barberName}\n\nAgendamento realizado pelo site oficial da ${tenant.name}!`;
+    const whatsappText = `💈 *Novo Agendamento Confirmado!*\n\n✂️ *Serviço(s):* ${servicesText} (${totalServicesDuration} min)${discountText}\n💰 *Valor:* ${priceText}${productsText}\n📅 *Data:* ${dateOptions[selectedDateIndex]?.date} às ${selectedSlot?.time}\n👤 *Cliente:* ${clientName}\n📱 *WhatsApp:* ${clientPhone}\n💈 *Profissional:* ${barberName}\n\nAgendamento realizado pelo site oficial da ${tenant.name}!`;
     
     const whatsappUrl = cleanPhone
       ? `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(whatsappText)}`
@@ -589,6 +610,15 @@ export default function RazorCloudBookingPage({ slug = 'fratresbarbearia' }: Boo
               <span className="text-zinc-500">Profissional:</span>
               <span className="font-bold text-white">{barberName}</span>
             </div>
+
+            {barberDiscountAmount > 0 && (
+              <div className="flex justify-between border-b border-zinc-800/80 pb-2.5 text-emerald-400">
+                <span className="font-semibold flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" /> Desconto {selectedProfessional?.discount_badge || 'Profissional'}:
+                </span>
+                <span className="font-bold">- R$ {barberDiscountAmount.toFixed(2)}</span>
+              </div>
+            )}
 
             <div className="flex justify-between pt-0.5">
               <span className="text-zinc-500">Valor Total:</span>
@@ -888,7 +918,15 @@ export default function RazorCloudBookingPage({ slug = 'fratresbarbearia' }: Boo
               </div>
             )}
             <div>
-              <h3 className="font-bold text-sm text-white">{barber.full_name}</h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-sm text-white">{barber.full_name}</h3>
+                {barber.discount_type && barber.discount_type !== 'none' && Number(barber.discount_value) > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm">
+                    <Sparkles className="w-3 h-3" />
+                    {barber.discount_badge || (barber.discount_type === 'percentage' ? `${barber.discount_value}% OFF` : `R$ ${barber.discount_value} OFF`)}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-zinc-400 capitalize">{barber.role === 'owner' ? 'Especialista / Dono' : 'Barbeiro'}</p>
             </div>
           </div>
@@ -928,7 +966,15 @@ export default function RazorCloudBookingPage({ slug = 'fratresbarbearia' }: Boo
             )}
             <div className="min-w-0">
               <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Barbeiro Selecionado</p>
-              <p className="text-xs sm:text-sm font-bold text-white truncate">{selectedProfessional.full_name}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-xs sm:text-sm font-bold text-white truncate">{selectedProfessional.full_name}</p>
+                {selectedProfessional.discount_type && selectedProfessional.discount_type !== 'none' && Number(selectedProfessional.discount_value) > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <Sparkles className="w-2.5 h-2.5" />
+                    {selectedProfessional.discount_badge || (selectedProfessional.discount_type === 'percentage' ? `${selectedProfessional.discount_value}% OFF` : `R$ ${selectedProfessional.discount_value} OFF`)}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1221,6 +1267,18 @@ export default function RazorCloudBookingPage({ slug = 'fratresbarbearia' }: Boo
             <span className="text-zinc-500">Produtos Adicionais:</span>
             <span className="font-bold text-purple-400">
               + R$ {productsTotal.toFixed(2)} ({selectedProductsList.reduce((acc, p) => acc + p.quantity, 0)} itens)
+            </span>
+          </div>
+        )}
+
+        {barberDiscountAmount > 0 && (
+          <div className="flex justify-between border-b border-zinc-800/60 pb-2">
+            <span className="text-emerald-400 font-semibold flex items-center gap-1 text-xs">
+              <Sparkles className="w-3.5 h-3.5" />
+              Desconto {selectedProfessional?.discount_badge || 'Profissional'}:
+            </span>
+            <span className="font-bold text-emerald-400">
+              - R$ {barberDiscountAmount.toFixed(2)}
             </span>
           </div>
         )}

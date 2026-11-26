@@ -72,12 +72,21 @@ export default function RazorCloudAdminShell({
 
   // Modal de Segurança e Senha do Usuário
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [accountModalTab, setAccountModalTab] = useState<'security' | 'discount'>('security');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+
+  // Estado do Desconto Promocional do Barbeiro
+  const [discountType, setDiscountType] = useState<'none' | 'percentage' | 'fixed'>(currentUser.discount_type || 'none');
+  const [discountValue, setDiscountValue] = useState<string>(currentUser.discount_value !== undefined && currentUser.discount_value !== null ? String(currentUser.discount_value) : '15');
+  const [discountBadge, setDiscountBadge] = useState<string>(currentUser.discount_badge || 'Barbeiro Júnior');
+  const [isSavingDiscount, setIsSavingDiscount] = useState(false);
+  const [discountSuccess, setDiscountSuccess] = useState<string | null>(null);
+  const [discountError, setDiscountError] = useState<string | null>(null);
 
   const isOwner = currentUser.role === 'owner' || currentUser.role === 'admin';
 
@@ -166,6 +175,42 @@ export default function RazorCloudAdminShell({
     }
   }
 
+  async function handleSaveDiscount(e: React.FormEvent) {
+    e.preventDefault();
+    setIsSavingDiscount(true);
+    setDiscountSuccess(null);
+    setDiscountError(null);
+
+    const val = parseFloat(discountValue) || 0;
+    try {
+      const res = await DataService.updateBarberDiscount(currentUser.id, organization.id, {
+        discount_type: discountType,
+        discount_value: val,
+        discount_badge: discountBadge.trim(),
+      });
+
+      if (res.success) {
+        setDiscountSuccess('Configurações de desconto salvas com sucesso!');
+        const updatedUser: UserProfile = {
+          ...currentUser,
+          discount_type: discountType,
+          discount_value: val,
+          discount_badge: discountBadge.trim(),
+        };
+        if (onUpdateUser) {
+          onUpdateUser(updatedUser);
+        }
+        setTimeout(() => setDiscountSuccess(null), 2500);
+      } else {
+        setDiscountError(res.error || 'Erro ao salvar desconto.');
+      }
+    } catch (err: any) {
+      setDiscountError(err.message || 'Erro ao processar alteração.');
+    } finally {
+      setIsSavingDiscount(false);
+    }
+  }
+
   const renderContent = () => {
     switch (activeTab) {
       case 'agenda':
@@ -180,7 +225,7 @@ export default function RazorCloudAdminShell({
       case 'financial':
         return <FinancialTab organization={organization} currentUser={currentUser} />;
       case 'services':
-        return <ServicesTab organization={organization} />;
+        return <ServicesTab organization={organization} currentUser={currentUser} />;
       case 'products':
         return <ProductsTab organization={organization} onUpdateOrg={onUpdateOrg} />;
       case 'clients':
@@ -398,7 +443,7 @@ export default function RazorCloudAdminShell({
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Minha Conta & Senha</h3>
+                  <h3 className="text-base font-bold text-white">Minha Conta & Perfil</h3>
                   <p className="text-xs text-zinc-400">
                     {currentUser.full_name} • <span className="capitalize">{currentUser.role === 'owner' ? 'Proprietário' : 'Barbeiro'}</span>
                   </p>
@@ -412,7 +457,200 @@ export default function RazorCloudAdminShell({
               </button>
             </div>
 
-            {/* Visualização da Senha Atual com o Olho */}
+            {/* Abas do Modal de Conta */}
+            <div className="flex border-b border-zinc-800 text-xs">
+              <button
+                type="button"
+                onClick={() => setAccountModalTab('security')}
+                className={`flex-1 py-2 font-bold text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                  accountModalTab === 'security'
+                    ? 'border-emerald-400 text-white'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Senha & Acesso</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAccountModalTab('discount')}
+                className={`flex-1 py-2 font-bold text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                  accountModalTab === 'discount'
+                    ? 'border-emerald-400 text-white'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Preço Promocional</span>
+              </button>
+            </div>
+
+            {accountModalTab === 'discount' ? (
+              /* Aba: Meu Desconto Promocional nos Atendimentos */
+              <form onSubmit={handleSaveDiscount} className="space-y-3.5 pt-1">
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Desconto Pessoal nos Seus Atendimentos</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-300 leading-relaxed">
+                    Você pode oferecer um valor menor ou promocional para seus clientes quando eles agendarem diretamente com você, sem alterar a tabela de preços oficial do salão.
+                  </p>
+                </div>
+
+                {discountSuccess && (
+                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs flex items-center gap-2">
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>{discountSuccess}</span>
+                  </div>
+                )}
+                {discountError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{discountError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-xs text-zinc-400 font-medium block mb-1.5">
+                    Modo de Desconto
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType('none')}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all ${
+                        discountType === 'none'
+                          ? 'bg-zinc-800 text-white border-zinc-600 shadow-sm'
+                          : 'bg-zinc-950/60 text-zinc-400 border-zinc-800 hover:text-white'
+                      }`}
+                    >
+                      Desativado
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType('percentage')}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all ${
+                        discountType === 'percentage'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                          : 'bg-zinc-950/60 text-zinc-400 border-zinc-800 hover:text-white'
+                      }`}
+                    >
+                      Porcentagem (%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType('fixed')}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all ${
+                        discountType === 'fixed'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                          : 'bg-zinc-950/60 text-zinc-400 border-zinc-800 hover:text-white'
+                      }`}
+                    >
+                      Valor Fixo (R$)
+                    </button>
+                  </div>
+                </div>
+
+                {discountType !== 'none' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-zinc-400 font-medium block mb-1">
+                          {discountType === 'percentage' ? 'Porcentagem OFF (%)' : 'Valor Desconto (R$)'}
+                        </label>
+                        <input
+                          type="number"
+                          step={discountType === 'percentage' ? '1' : '0.50'}
+                          min="0.5"
+                          max={discountType === 'percentage' ? '90' : '300'}
+                          required
+                          value={discountValue}
+                          onChange={(e) => setDiscountValue(e.target.value)}
+                          placeholder={discountType === 'percentage' ? 'Ex: 20' : 'Ex: 10.00'}
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-zinc-400 font-medium block mb-1">
+                          Texto do Selo (Badge)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={discountBadge}
+                          onChange={(e) => setDiscountBadge(e.target.value)}
+                          placeholder="Ex: Barbeiro Júnior"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Sugestões rápidas de selo */}
+                    <div>
+                      <span className="text-[10px] text-zinc-500 block mb-1">Sugestões de texto:</span>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {['Barbeiro Júnior', 'Iniciante', 'Preço Promocional', 'Desconto Especial'].map((sug) => (
+                          <button
+                            key={sug}
+                            type="button"
+                            onClick={() => setDiscountBadge(sug)}
+                            className="text-[10px] px-2 py-0.5 rounded-lg bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700/60 transition-colors"
+                          >
+                            {sug}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Pré-visualização do desconto */}
+                    <div className="p-3 bg-zinc-950/80 border border-zinc-800 rounded-xl space-y-1.5 text-xs">
+                      <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider block">
+                        Pré-visualização para o Cliente:
+                      </span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400">Exemplo em corte de R$ 40,00:</span>
+                        <div className="text-right">
+                          <span className="line-through text-zinc-500 mr-2 text-[11px]">R$ 40,00</span>
+                          <span className="font-extrabold text-emerald-400">
+                            R$ {(
+                              discountType === 'percentage'
+                                ? 40 - (40 * (parseFloat(discountValue) || 0)) / 100
+                                : Math.max(0, 40 - (parseFloat(discountValue) || 0))
+                            ).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="pt-1 flex items-center gap-1.5 text-[11px] text-emerald-400 font-bold">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Selo no site: [{discountBadge || 'Desconto'} • {discountType === 'percentage' ? `${discountValue}% OFF` : `R$ ${discountValue} OFF`}]</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordModalOpen(false)}
+                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl transition-colors"
+                  >
+                    Fechar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingDiscount}
+                    className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md"
+                  >
+                    {isSavingDiscount ? 'Salvando...' : 'Salvar Meu Desconto'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                {/* Visualização da Senha Atual com o Olho */}
             <div className="p-3.5 bg-zinc-950/70 border border-zinc-800 rounded-xl space-y-2">
               <label className="text-xs text-zinc-400 font-medium block">
                 Sua Senha Atual
@@ -533,6 +771,8 @@ export default function RazorCloudAdminShell({
                 </div>
               </form>
             )}
+          </div>
+        )}
           </div>
         </div>
       )}
