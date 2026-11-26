@@ -34,40 +34,50 @@ export function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative text-zinc-50 overflow-hidden">
-        
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto overflow-x-hidden animate-in fade-in duration-200"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl relative text-zinc-50 max-h-[88dvh] sm:max-h-[90vh] overflow-y-auto overflow-x-hidden flex flex-col pb-[max(2rem,env(safe-area-inset-bottom))]"
+      >
+        {/* Barra puxadora para mobile (Bottom Sheet) */}
+        <div className="w-12 h-1.5 bg-zinc-700/80 rounded-full mx-auto mb-3 sm:hidden shrink-0" />
+
         {/* Glow de fundo */}
         <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none -mr-12 -mt-12" />
 
         {/* Botão Fechar */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition-colors"
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition-colors z-10"
           aria-label="Fechar"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Cabeçalho do App com Logo Oficial */}
-        <div className="flex items-center gap-4 mb-6 pt-1">
-          <div className="w-16 h-16 rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-700 shadow-xl flex items-center justify-center shrink-0">
+        <div className="flex items-center gap-3.5 mb-5 pt-0 sm:pt-1 pr-8">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-700 shadow-xl flex items-center justify-center shrink-0">
             <img
               src="/logo.webp"
               alt="Fratres Barbearia"
               className="w-full h-full object-cover"
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
                 Exclusivo Equipe
               </span>
             </div>
-            <h3 className="text-lg font-bold text-white mt-1 leading-tight">
+            <h3 className="text-base sm:text-lg font-bold text-white mt-1 leading-tight truncate">
               Fratres Barbearia
             </h3>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-400 truncate">
               Aplicativo de Gestão & Agenda
             </p>
           </div>
@@ -93,8 +103,8 @@ export function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProps) {
         ) : (
           <>
             {/* Benefícios para o Barbeiro */}
-            <div className="space-y-2.5 mb-6">
-              <div className="flex items-start gap-3 p-3 bg-zinc-950/60 border border-zinc-800/80 rounded-2xl">
+            <div className="space-y-2 mb-4">
+              <div className="flex items-start gap-3 p-2.5 sm:p-3 bg-zinc-950/60 border border-zinc-800/80 rounded-2xl">
                 <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
                   <Zap className="w-4 h-4" />
                 </div>
@@ -106,7 +116,7 @@ export function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProps) {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 p-3 bg-zinc-950/60 border border-zinc-800/80 rounded-2xl">
+              <div className="flex items-start gap-3 p-2.5 sm:p-3 bg-zinc-950/60 border border-zinc-800/80 rounded-2xl">
                 <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
                   <Smartphone className="w-4 h-4" />
                 </div>
@@ -118,7 +128,7 @@ export function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProps) {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 p-3 bg-zinc-950/60 border border-zinc-800/80 rounded-2xl">
+              <div className="flex items-start gap-3 p-2.5 sm:p-3 bg-zinc-950/60 border border-zinc-800/80 rounded-2xl">
                 <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                   <ShieldCheck className="w-4 h-4" />
                 </div>
@@ -133,44 +143,45 @@ export function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProps) {
 
             {/* Instruções para iOS (iPhone / iPad) */}
             {isIOS ? (
-              <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 space-y-3 mb-4">
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 space-y-3 mb-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-zinc-200">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   Como Instalar no iPhone (Safari):
                 </div>
 
                 <div className="space-y-2 text-xs text-zinc-300">
-                  <div className="flex items-center gap-3 p-2 bg-zinc-900/80 rounded-xl border border-zinc-800/80">
-                    <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 font-bold">
+                  <div className="flex items-center gap-3 p-2.5 bg-zinc-900/80 rounded-xl border border-zinc-800/80">
+                    <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 font-bold text-xs">
                       1
                     </div>
-                    <p className="text-[11px] leading-tight">
-                      Toque no botão <strong>Compartilhar</strong> <span className="inline-block px-1 py-0.5 bg-zinc-800 rounded text-[10px]">⎋ Compartilhar</span> na barra do Safari.
+                    <p className="text-[11px] leading-snug flex-1">
+                      Toque no ícone <Share className="w-3.5 h-3.5 text-blue-400 inline mx-0.5 align-middle" /> <strong>Compartilhar</strong> na barra inferior do Safari.
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-3 p-2 bg-zinc-900/80 rounded-xl border border-zinc-800/80">
-                    <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 font-bold">
+                  <div className="flex items-center gap-3 p-2.5 bg-zinc-900/80 rounded-xl border border-zinc-800/80">
+                    <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 font-bold text-xs">
                       2
                     </div>
-                    <p className="text-[11px] leading-tight">
-                      Role as opções e toque em <strong>"Adicionar à Tela de Início"</strong> (ícone ➕).
+                    <p className="text-[11px] leading-snug flex-1">
+                      Role as opções e toque em <PlusSquare className="w-3.5 h-3.5 text-emerald-400 inline mx-0.5 align-middle" /> <strong>"Adicionar à Tela de Início"</strong>.
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-3 p-2 bg-zinc-900/80 rounded-xl border border-zinc-800/80">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 font-bold">
+                  <div className="flex items-center gap-3 p-2.5 bg-zinc-900/80 rounded-xl border border-zinc-800/80">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 font-bold text-xs">
                       3
                     </div>
-                    <p className="text-[11px] leading-tight">
+                    <p className="text-[11px] leading-snug flex-1">
                       Toque em <strong>"Adicionar"</strong> no canto superior direito. Pronto!
                     </p>
                   </div>
                 </div>
 
                 <button
+                  type="button"
                   onClick={onClose}
-                  className="w-full py-3 bg-white text-zinc-950 hover:bg-zinc-200 font-extrabold text-xs rounded-xl transition-all shadow-md mt-1"
+                  className="w-full py-3.5 bg-white text-zinc-950 hover:bg-zinc-200 active:scale-[0.98] font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-md mt-2 min-h-[44px]"
                 >
                   Entendi as Instruções
                 </button>
@@ -179,9 +190,10 @@ export function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProps) {
               /* Botão de Instalação Nativa (Android / Chrome / Edge) */
               <div className="space-y-2">
                 <button
+                  type="button"
                   onClick={handleNativeInstall}
                   disabled={installing}
-                  className="w-full py-3.5 bg-white text-zinc-950 hover:bg-zinc-200 font-extrabold text-sm rounded-2xl transition-all flex items-center justify-center gap-2 shadow-xl active:scale-[0.98] disabled:opacity-50"
+                  className="w-full py-3.5 bg-white text-zinc-950 hover:bg-zinc-200 active:scale-[0.98] font-extrabold text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-xl disabled:opacity-50 min-h-[44px]"
                 >
                   <Download className="w-4 h-4 text-zinc-950" />
                   {installing ? 'Instalando...' : 'Instalar Aplicativo Agora'}
@@ -192,13 +204,14 @@ export function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProps) {
               </div>
             ) : (
               /* Fallback para Navegadores sem suporte a prompt automático */
-              <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 text-center space-y-2">
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-4 text-center space-y-3">
                 <p className="text-xs text-zinc-300">
                   Para instalar, abra as opções do seu navegador (<strong>três pontinhos ⋮</strong>) e clique em <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.
                 </p>
                 <button
+                  type="button"
                   onClick={onClose}
-                  className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-xs font-bold text-white transition-colors"
+                  className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-xs font-bold text-white transition-colors min-h-[44px]"
                 >
                   Fechar
                 </button>

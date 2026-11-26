@@ -433,10 +433,19 @@ export default function RazorCloudAdminShell({
 
       </main>
 
-      {/* Modal de Segurança e Senha de Acesso */}
+      {/* Modal de Segurança e Senha de Acesso (Bottom Sheet no Mobile) */}
       {isPasswordModalOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsPasswordModalOpen(false);
+          }}
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto overflow-x-hidden animate-in fade-in duration-200"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 sm:p-6 pb-[max(2rem,env(safe-area-inset-bottom))] shadow-2xl space-y-4 max-h-[88dvh] overflow-y-auto flex flex-col"
+          >
+            <div className="w-12 h-1.5 bg-zinc-700/80 rounded-full mx-auto mb-1 sm:hidden shrink-0" />
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
@@ -635,14 +644,14 @@ export default function RazorCloudAdminShell({
                   <button
                     type="button"
                     onClick={() => setIsPasswordModalOpen(false)}
-                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl transition-colors"
+                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs py-3 rounded-xl transition-colors min-h-[44px]"
                   >
                     Fechar
                   </button>
                   <button
                     type="submit"
                     disabled={isSavingDiscount}
-                    className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md"
+                    className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs py-3 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md min-h-[44px]"
                   >
                     {isSavingDiscount ? 'Salvando...' : 'Salvar Meu Desconto'}
                   </button>
@@ -757,14 +766,14 @@ export default function RazorCloudAdminShell({
                   <button
                     type="button"
                     onClick={() => setIsPasswordModalOpen(false)}
-                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl transition-colors"
+                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs py-3 rounded-xl transition-colors min-h-[44px]"
                   >
                     Fechar
                   </button>
                   <button
                     type="submit"
                     disabled={isSavingPassword || !newPasswordInput.trim()}
-                    className="flex-1 bg-white text-zinc-950 hover:bg-zinc-200 font-bold text-xs py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    className="flex-1 bg-white text-zinc-950 hover:bg-zinc-200 font-bold text-xs py-3 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 min-h-[44px]"
                   >
                     {isSavingPassword ? 'Salvando...' : 'Confirmar Nova Senha'}
                   </button>

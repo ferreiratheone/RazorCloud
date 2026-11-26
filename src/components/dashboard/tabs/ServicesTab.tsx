@@ -378,8 +378,16 @@ export function ServicesTab({ organization, currentUser }: ServicesTabProps) {
 
       {/* Modal Criar / Editar Serviço com Promoção e Categoria (Bottom Sheet no Mobile) */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-7 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsModalOpen(false);
+          }}
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto overflow-x-hidden animate-in fade-in duration-200"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-7 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto"
+          >
             <div className="w-12 h-1.5 bg-zinc-700 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
             
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">

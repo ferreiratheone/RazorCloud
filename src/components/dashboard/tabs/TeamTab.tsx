@@ -349,8 +349,16 @@ export function TeamTab({ organization }: TeamTabProps) {
 
       {/* Modal Criar / Editar Membro (Bottom Sheet no Mobile) */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsModalOpen(false);
+          }}
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto overflow-x-hidden animate-in fade-in duration-200"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto"
+          >
             <div className="w-12 h-1.5 bg-zinc-700 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
 
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
@@ -623,8 +631,16 @@ export function TeamTab({ organization }: TeamTabProps) {
 
       {/* Modal de Sucesso com Compartilhamento das Credenciais via WhatsApp (Bottom Sheet no Mobile) */}
       {justCreatedCreds && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-sm w-full p-5 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl text-center space-y-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setJustCreatedCreds(null);
+          }}
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto overflow-x-hidden animate-in fade-in duration-200"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-2xl max-w-sm w-full p-5 sm:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl text-center space-y-4 max-h-[92vh] overflow-y-auto"
+          >
             <div className="w-12 h-1.5 bg-zinc-700 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
 
             <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto shadow-lg">
