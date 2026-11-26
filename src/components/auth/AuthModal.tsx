@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase/client';
 import { DataService } from '@/src/lib/data-service';
+import { PwaInstallButton } from '@/src/components/pwa/PwaInstallModal';
 import type { Organization, UserProfile } from '@/src/types/database';
 
 interface AuthModalProps {
@@ -665,6 +666,11 @@ export function AuthModal({ isOpen, onClose, onSuccess, isFullPage = false }: Au
             )}
           </button>
         </form>
+
+        {/* Botão de Instalação do App para a Equipe */}
+        <div className="mt-4">
+          <PwaInstallButton variant="default" className="w-full justify-center min-h-[44px]" />
+        </div>
 
         {/* Seção de Suporte à Equipe Fratres */}
         <div className="mt-6 pt-5 border-t border-zinc-800/80 space-y-3">

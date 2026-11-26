@@ -33,6 +33,7 @@ import { SettingsTab } from './tabs/SettingsTab';
 import { FinancialTab } from './tabs/FinancialTab';
 import { ProductsTab } from './tabs/ProductsTab';
 import { WhatsAppTab } from './tabs/WhatsAppTab';
+import { PwaInstallButton } from '@/src/components/pwa/PwaInstallModal';
 import { isSupabaseConfigured } from '@/src/lib/supabase/client';
 import type { Organization, UserProfile } from '@/src/types/database';
 
@@ -276,7 +277,10 @@ export default function RazorCloudAdminShell({
             </button>
           ))}
 
-          <div className="pt-6 px-3">
+          <div className="pt-4 px-3 space-y-2">
+            {/* Atalho de Instalação PWA para Equipe */}
+            <PwaInstallButton variant="sidebar" />
+
             <div className="p-3 bg-[#121212] border border-zinc-800 rounded-xl space-y-1">
               <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
                 <ShieldCheck className="w-3.5 h-3.5" />
@@ -362,6 +366,9 @@ export default function RazorCloudAdminShell({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Botão de Instalação do PWA no Topo */}
+            <PwaInstallButton variant="pill" />
+
             <button
               onClick={() => handleOpenPublicPage(organization.slug)}
               className="flex items-center gap-1.5 text-xs font-bold text-zinc-200 bg-[#121212] hover:bg-zinc-800 border border-zinc-800 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl transition-colors shadow-sm shrink-0"
