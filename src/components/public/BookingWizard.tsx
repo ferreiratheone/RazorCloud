@@ -135,7 +135,7 @@ export default function RazorCloudBookingPage({ slug = 'fratresbarbearia' }: Boo
 
   // Inicializar widget do Cloudflare Turnstile se chave configurada na Etapa 4 (Confirmação)
   useEffect(() => {
-    const siteKey = (import.meta as any).env?.VITE_TURNSTILE_SITE_KEY;
+    const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || '0x4AAAAAAGJHPWFNUZMygxjc';
     if (step === 4 && siteKey && typeof window !== 'undefined') {
       let intervalId: any = null;
       let attempts = 0;

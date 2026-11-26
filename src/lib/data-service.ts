@@ -1,12 +1,12 @@
 import { supabase, isSupabaseConfigured, createIsolatedClient } from './supabase/client';
 import { getNormalizedCategory } from './categories';
-import type { 
-  Organization, 
-  UserProfile, 
+import type {
+  Organization,
+  UserProfile,
   Role,
-  Service, 
-  Schedule, 
-  Appointment, 
+  Service,
+  Schedule,
+  Appointment,
   TimeSlot,
   MembershipPlan,
   CustomerSubscription,
@@ -70,7 +70,7 @@ export const DataService = {
           const authUserId = authData.user.id;
           const userEmail = authData.user.email || '';
           const meta = authData.user.user_metadata || {};
-          
+
           const userSavedOrg = getLocalData<Organization | null>('saved_org_' + authUserId, null);
           const shopName = userSavedOrg?.name || meta.barber_shop_name || 'Minha Barbearia';
           const fullName = meta.full_name || 'Proprietário';
@@ -195,7 +195,7 @@ export const DataService = {
       try {
         // Seleção segura de colunas públicas (omite whatsapp_api_token de visitantes anônimos)
         const publicOrgCols = 'id, name, slug, address, phone, logo_url, plans_enabled, products_enabled, whatsapp_auto_enabled, whatsapp_reminder_hours, whatsapp_msg_confirmation, whatsapp_msg_reminder, created_at, updated_at';
-        
+
         const targetSlug = slug || PRIMARY_ORGANIZATION_SLUG;
         const { data, error } = await supabase
           .from('organizations')
@@ -266,7 +266,7 @@ export const DataService = {
           setLocalData('org_' + data.id, data);
           return data as Organization;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const currentOrg = getLocalData<Organization | null>('current_org', null);
@@ -697,11 +697,11 @@ export const DataService = {
   async saveBarber(barber: Partial<UserProfile> & { organization_id: string }): Promise<UserProfile> {
     const isEditing = Boolean(barber.id);
     const validUuid = barber.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(barber.id);
-    const barberId = validUuid 
-      ? barber.id! 
-      : (typeof crypto !== 'undefined' && crypto.randomUUID 
-          ? crypto.randomUUID() 
-          : 'barber-' + Date.now());
+    const barberId = validUuid
+      ? barber.id!
+      : (typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : 'barber-' + Date.now());
 
     const finalBarber: UserProfile = {
       id: barberId,
@@ -859,8 +859,8 @@ export const DataService = {
   },
 
   async updateTeamMember(
-    id: string, 
-    updates: Partial<UserProfile> & { password?: string; reset_changes_count?: boolean }, 
+    id: string,
+    updates: Partial<UserProfile> & { password?: string; reset_changes_count?: boolean },
     orgId: string
   ): Promise<UserProfile> {
     const { password, reset_changes_count, ...barberUpdates } = updates;
@@ -1944,9 +1944,9 @@ export const DataService = {
     message: string;
   }): Promise<{ success: boolean; error?: string }> {
     // Módulo de automação de WhatsApp via API paga configurado em manutenção
-    return { 
-      success: false, 
-      error: 'Automação de WhatsApp via gateway pago está temporariamente em manutenção.' 
+    return {
+      success: false,
+      error: 'Automação de WhatsApp via gateway pago está temporariamente em manutenção.'
     };
   },
 
@@ -2022,11 +2022,11 @@ export const DataService = {
       const barber = team.find(t => t.id === apt.user_id) || apt.barber;
       const bName = barber?.full_name || 'Barbeiro';
       if (!barberCounts[apt.user_id || bName]) {
-        barberCounts[apt.user_id || bName] = { 
-          count: 0, 
-          revenue: 0, 
-          name: bName, 
-          avatarUrl: barber?.avatar_url 
+        barberCounts[apt.user_id || bName] = {
+          count: 0,
+          revenue: 0,
+          name: bName,
+          avatarUrl: barber?.avatar_url
         };
       }
       barberCounts[apt.user_id || bName].count += 1;

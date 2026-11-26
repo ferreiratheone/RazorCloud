@@ -1,19 +1,13 @@
 import { createBrowserClient } from '@supabase/ssr';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
-const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) ? (import.meta as any).env : {};
-
 export const supabaseUrl = 
-  metaEnv.VITE_SUPABASE_URL || 
-  metaEnv.NEXT_PUBLIC_SUPABASE_URL ||
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL) ||
-  'https://your-project.supabase.co';
+  import.meta.env.VITE_SUPABASE_URL || 
+  'https://kwnltgrcrcfrbzwbqjmd.supabase.co';
 
 export const supabaseAnonKey = 
-  metaEnv.VITE_SUPABASE_ANON_KEY || 
-  metaEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY) ||
-  'your-anon-key';
+  import.meta.env.VITE_SUPABASE_ANON_KEY || 
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3bmx0Z3JjcmNmcmJ6d2Jxam1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyODUwMDYsImV4cCI6MjEwMzg2MTAwNn0.O6pi9anHS3tzl4Ib1CbB9BbXNUgKYVZHKvbdkcVzLHI';
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(
