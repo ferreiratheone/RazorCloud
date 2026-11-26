@@ -16,7 +16,6 @@ import {
   X
 } from 'lucide-react';
 import { DataService } from '@/src/lib/data-service';
-import type { Organization, Service } from '@/src/types/database';
 import { APP_SERVICE_CATEGORIES, getNormalizedCategory, getCategoryBadge } from '@/src/lib/categories';
 import type { Organization, Service, UserProfile } from '@/src/types/database';
 
